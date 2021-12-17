@@ -11,11 +11,14 @@ FRAMEWORKS_2=-lopengl32 -lglu32
 LIBDIRS=-L$(GLEW_PATH)/lib -L$(FREEGLUT_PATH)/lib
 LIBS=-lglew32 -lfreeglut
 
-all: MainCuda MainOpenGL
-	nvcc $(CFLAGS) $(INCLUDES) $(LIBDIRS) $(LIBS) $(FRAMEWORKS_2) MainCuda.obj MainOpenGL.obj -o Main
+all: MainCuda MainOpenGL Main
+	nvcc $(CFLAGS) $(INCLUDES) $(LIBDIRS) $(LIBS) $(FRAMEWORKS_2) Main.obj MainCuda.obj MainOpenGL.obj -o Main
 
-MainCuda: main_cu.cu
-	nvcc $(CFLAGS) $(INCLUDES) $(LIBDIRS) $(LIBS) $(FRAMEWORKS_2) -c main_cu.cu -o MainCuda
+Main: main.cpp
+	nvcc $(CFLAGS) $(INCLUDES) $(LIBDIRS) $(LIBS) $(FRAMEWORKS_2) -c main.cpp -o Main
+
+MainCuda: MainCuda.cu
+	nvcc $(CFLAGS) $(INCLUDES) $(LIBDIRS) $(LIBS) $(FRAMEWORKS_2) -c MainCuda.cu -o MainCuda
 
 MainOpenGL: MainOpenGL.cpp
 	nvcc $(CFLAGS) $(INCLUDES) $(LIBDIRS) $(LIBS) $(FRAMEWORKS_2) -c MainOpenGL.cpp -o MainOpenGL
@@ -29,7 +32,5 @@ clean:
 	del -f Main.exp
 	del -f Main.lib
 	del -f Main.pdb
-	del -f MainOpenGL.pdb
 	del -f MainOpenGL.obj
-	del -f MainCuda.pdb
 	del -f MainCuda.obj

@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
+#include "MainCuda.h"
 #define M_PI 3.14159265358979323846264338327950288
 
 //----------------------------------------------------------------------------
@@ -51,6 +52,7 @@ void MainOpenGL::init()
 //    MainOpenCL::setup(quad);
 //    glFinish();
 //    MainOpenCL::onDrawFrame();
+    MainCuda::doCalculation();
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(1.0, 1.0, 1.0, 1.0);

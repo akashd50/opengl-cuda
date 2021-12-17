@@ -5,7 +5,6 @@
 #include <GL/glew.h>
 #include <GL/freeglut.h>
 #include <GL/freeglut_ext.h>
-
 //__global__
 //void add(int n, float *x, float *y)
 //{
