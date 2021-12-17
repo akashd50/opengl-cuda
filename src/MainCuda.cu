@@ -1,8 +1,8 @@
 #pragma once
-#include "MainCuda.h"
 #include <iostream>
 #include <math.h>
 #include "glm/glm.hpp"
+#include "headers/MainCuda.h"
 
 __global__
 void add(int n, float *x, float *y)
@@ -38,8 +38,10 @@ void MainCuda::doCalculation() {
 
     // Check for errors (all values should be 3.0f)
     float maxError = 0.0f;
-    for (int i = 0; i < N; i++)
-        maxError = fmax(maxError, fabs(y[i]-3.0f));
+    std::cout << y[0] << std::endl;
+    for (int i = 0; i < N; i++) {
+        maxError = fmax(maxError, fabs(y[i] - 3.0f));
+    }
     std::cout << "Max error: " << maxError << std::endl;
 
     // Free memory

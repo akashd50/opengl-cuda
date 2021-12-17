@@ -1,11 +1,7 @@
 #pragma once
-#include <iostream>
-#include <math.h>
-#include "glm/glm.hpp"
 #include <GL/glew.h>
 #include <GL/freeglut.h>
-#include <GL/freeglut_ext.h>
-#include "MainOpenGL.h"
+#include "headers/MainOpenGL.h"
 
 #define MAX_SOURCE_SIZE (0x100000)
 
@@ -37,6 +33,4 @@ int main(int argc, char** argv) {
     glutMainLoop();
 
     return 0;
-    //setup();
-    //onDrawFrame();
 }

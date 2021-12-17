@@ -1,9 +1,10 @@
 #pragma once
-#include "MainOpenGL.h"
 #include <glm/glm.hpp>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
-#include "MainCuda.h"
+#include "headers/MainCuda.h"
+#include "headers/MainOpenGL.h"
+
 #define M_PI 3.14159265358979323846264338327950288
 
 //----------------------------------------------------------------------------
