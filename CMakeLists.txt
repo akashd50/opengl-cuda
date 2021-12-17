@@ -3,13 +3,15 @@ set(GLM_PATH "C:/dev_libs/glm-0.9.9.8/glm")
 set(GLEW_PATH "C:/dev_libs/glew")
 set(FREEGLUT_PATH "C:/dev_libs/freeglut")
 
-project(Main CUDA)
+project(Main LANGUAGES CXX CUDA)
 
 set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(Main main.cpp MainCuda.cu MainOpenGL.cpp)
-set_source_files_properties(main.cpp PROPERTIES LANGUAGE CUDA)
-set_source_files_properties(MainOpenGL.cpp PROPERTIES LANGUAGE CUDA)
+# set_source_files_properties(main.cpp PROPERTIES LANGUAGE CUDA)
+# set_source_files_properties(MainOpenGL.cpp PROPERTIES LANGUAGE CUDA)
 
 set_target_properties(Main PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
