@@ -43,8 +43,8 @@ void MainOpenGL::init()
     //default_framebuffer = new Framebuffer(600, 600);
     //single_color_shader = new Shader("shaders/single_color_vs.glsl", "shaders/single_color_fs.glsl");
     texture_shader = new Shader("../shaders/texture_vs.glsl", "../shaders/texture_fs.glsl");
-    test_texture = new Texture("../resources/scr1.bmp");
-    //test_texture = new Texture(800, 800, GL_RGBA);
+    //test_texture = new Texture("../resources/scr1.bmp");
+    test_texture = new Texture(512, 512, GL_RGBA);
 
     quad = new Quad();
     //quad->build(single_color_shader);

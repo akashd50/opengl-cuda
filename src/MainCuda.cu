@@ -6,7 +6,22 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
+#include <surface_functions.h>
+#include <surface_indirect_functions.h>
 #include <vector_types.h>
+#include <math_functions.h>
+
+__device__ float3 operator+(const float3 &a, const float3 &b) {
+    return make_float3(a.x+b.x, a.y+b.y, a.z+b.z);
+}
+
+__device__ float3 operator-(const float3 &a, const float3 &b) {
+    return make_float3(a.x-b.x, a.y-b.y, a.z-b.z);
+}
+
+__device__ float dot(const float3 &a, const float3 &b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
 
 __global__
 void add(int n, float *x, float *y)
@@ -21,16 +36,71 @@ void add(int n, float *x, float *y)
         y[i] = x[i] + y[i];
 }
 
+__device__ float3 cast_ray(unsigned int x, unsigned int y, int width, int height) {
+    float d = 1.0;
+    float fov = 60.0;
+    float aspect_ratio = ((float)width) / ((float)height);
+    float h = d * (float)tan((3.1415 * fov) / 180.0 / 2.0);
+    float w = h * aspect_ratio;
+
+    float top = h;
+    float bottom = -h;
+    float left = -w;
+    float right = w;
+
+    float u = left + (right - left) * float(x) / ((float)width);
+    float v = bottom + (top - bottom) * (((float)height) - float(y)) / ((float)height);
+    return make_float3(u, v, -d);
+}
+
+__device__ const float MIN_T = -9999.0;
+__device__ const float HIT_T_OFFSET = 0.01;
+//
+__device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, float radius) {
+    float3 center_2_eye = eye - center;
+    float ray_dot_ray = dot(ray, ray);
+    float discriminant = pow(dot(ray, center_2_eye), 2) - ray_dot_ray * (dot(center_2_eye, center_2_eye) - pow(radius, 2));
+
+    if (discriminant > 0) {
+        discriminant = sqrt(discriminant);
+        float init = -dot(ray, center_2_eye);
+        float t1 = (init + discriminant) / ray_dot_ray;
+        float t2 = (init - discriminant) / ray_dot_ray;
+
+        float mint = min(t1, t2);
+        if (mint < HIT_T_OFFSET) {
+            return max(t1, t2);
+        }
+        return mint;
+    }
+    else if (discriminant == 0) {
+        float init = -dot(ray, center_2_eye);
+        float t1 = init / ray_dot_ray;
+        return t1;
+    }
+    return MIN_T;
+}
+
 __global__
 void textureCompute(cudaSurfaceObject_t image)
 {
-
     // blockIdx - index of block in grid
     // theadIdx - index of thread in block
     unsigned int x = threadIdx.x;
     unsigned int y = blockIdx.x;
-    //printf("Index (%d %d)", x, y);
-    uchar4 color = make_uchar4(x / 2, y / 2, 0, 127);
+
+    float3 sphere = make_float3(0.0, 0.0, -5.0);
+    float3 eye = make_float3(0.0, 0.0, 0.0);
+    float radius = 0.5;
+    float3 ray = cast_ray(x, y, 512, 512) - eye;
+    float sphereHit = check_hit_on_sphere(eye, ray, sphere, radius);
+    uchar4 color;
+    if (sphereHit >= 0 && sphereHit != MIN_T) {
+        color = make_uchar4(255, 0, 0, 255);
+    } else {
+        color = make_uchar4(0, 0, 0, 255);
+    }
+
     surf2Dwrite(color, image, x * sizeof(color), y, cudaBoundaryModeClamp);
 }
 
