@@ -1,15 +1,7 @@
 #pragma once
 #include <iostream>
-#include <math.h>
 #include "glm/glm.hpp"
-#include "headers/MainCuda.h"
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
-#include <surface_functions.h>
-#include <surface_indirect_functions.h>
-#include <vector_types.h>
-#include <math_functions.h>
+#include "headers/MainCuda.cuh"
 
 __device__ float3 operator+(const float3 &a, const float3 &b) {
     return make_float3(a.x+b.x, a.y+b.y, a.z+b.z);
@@ -21,6 +13,10 @@ __device__ float3 operator-(const float3 &a, const float3 &b) {
 
 __device__ float dot(const float3 &a, const float3 &b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+__device__ uchar4 toRGBA(const float3 &a) {
+    return make_uchar4(int(a.x * 255), int(a.y * 255), int(a.z * 255), 255);
 }
 
 __global__
@@ -55,7 +51,7 @@ __device__ float3 cast_ray(unsigned int x, unsigned int y, int width, int height
 
 __device__ const float MIN_T = -9999.0;
 __device__ const float HIT_T_OFFSET = 0.01;
-//
+
 __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, float radius) {
     float3 center_2_eye = eye - center;
     float ray_dot_ray = dot(ray, ray);
@@ -81,24 +77,27 @@ __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, floa
     return MIN_T;
 }
 
-__global__
-void textureCompute(cudaSurfaceObject_t image)
+__global__ void textureCompute(cudaSurfaceObject_t image, Scene* scene)
 {
     // blockIdx - index of block in grid
     // theadIdx - index of thread in block
     unsigned int x = threadIdx.x;
     unsigned int y = blockIdx.x;
 
-    float3 sphere = make_float3(0.0, 0.0, -5.0);
+    //float3 sphere = make_float3(0.0, 0.0, -5.0);
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float radius = 0.5;
     float3 ray = cast_ray(x, y, 512, 512) - eye;
-    float sphereHit = check_hit_on_sphere(eye, ray, sphere, radius);
     uchar4 color;
-    if (sphereHit >= 0 && sphereHit != MIN_T) {
-        color = make_uchar4(255, 0, 0, 255);
-    } else {
-        color = make_uchar4(0, 0, 0, 255);
+    for (int i=0; i<scene->numObjects; i++) {
+        Sphere* sp = &scene->objects[i];
+        float sphereHit = check_hit_on_sphere(eye, ray, sp->position, sp->radius);
+        if (sphereHit >= 0 && sphereHit != MIN_T) {
+            color = toRGBA(sp->material.ambient);
+            break;
+        } else {
+            color = make_uchar4(0, 0, 0, 255);
+        }
     }
 
     surf2Dwrite(color, image, x * sizeof(color), y, cudaBoundaryModeClamp);
@@ -113,7 +112,19 @@ inline void _check(cudaError_t code, char *file, int line)
     }
 }
 
-void MainCuda::texImageTest(Texture* texture) {
+Scene* allocateScene() {
+    Material material(make_float3(1.0, 0.5, 0.1), make_float3(1.0, 1.0, 1.0));
+    Sphere sphere(material, 1.0, make_float3(0.0, 0.0, -5.0));
+    auto scene = new Scene();
+    scene->addObject(sphere);
+
+    Scene* scenePtr;
+    check(cudaMalloc((void**)&scenePtr, sizeof(Scene)));
+    check(cudaMemcpy(scenePtr, scene, sizeof(Scene), cudaMemcpyHostToDevice));
+    return scenePtr;
+}
+
+void MainCuda::renderRayTracedScene(Texture* texture) {
     struct cudaGraphicsResource *vbo_res;
     // register this texture with CUDA
     //cudaGraphicsGLRegisterImage(&vbo_res, texture->getTextureId(),GL_TEXTURE_2D, cudaGraphicsMapFlagsReadOnly);
@@ -131,19 +142,10 @@ void MainCuda::texImageTest(Texture* texture) {
     cudaSurfaceObject_t viewCudaSurfaceObject;
     check(cudaCreateSurfaceObject(&viewCudaSurfaceObject, &viewCudaArrayResourceDesc));
 
-    textureCompute<<<512, 512>>>(viewCudaSurfaceObject);
-
-//    cudaArray *array;
-//    cudaGraphicsMapResources(1, &vbo_res, 0);
-//    cudaGraphicsSubResourceGetMappedArray(&array, vbo_res, 0,0);
-//
-//    texture<uchar4, cudaTextureType2D, cudaReadModeNormalizedFloat> texRef;
-//    cudaBindTextureToArray(texRef, (cudaArray *)array));
-//    texRef.filterMode = cudaFilterModeLinear;
+    textureCompute<<<512, 512>>>(viewCudaSurfaceObject, allocateScene());
 }
 
 void MainCuda::doCalculation() {
-
     int nDevices;
 
     cudaGetDeviceCount(&nDevices);

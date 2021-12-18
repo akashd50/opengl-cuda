@@ -2,7 +2,7 @@
 #include <glm/glm.hpp>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
-#include "headers/MainCuda.h"
+#include "headers/MainCuda.cuh"
 #include "headers/MainOpenGL.h"
 #include "headers/Quad.h"
 
@@ -52,7 +52,7 @@ void MainOpenGL::init()
     quad->build(texture_shader);
 
     //MainCuda::doCalculation();
-    MainCuda::texImageTest(test_texture);
+    MainCuda::renderRayTracedScene(test_texture);
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(1.0, 1.0, 1.0, 1.0);
