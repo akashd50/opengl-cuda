@@ -2,7 +2,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "headers/stb_image.h"
 
-std::string FileReader::readTextFile(std::string filename) {
+std::string FileReader::readTextFile(const std::string& filename) {
     std::ifstream dataFile;
     dataFile.open(filename);
 

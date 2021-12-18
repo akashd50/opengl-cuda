@@ -10,7 +10,7 @@ struct ImageData {
 
 class FileReader {
 public:
-    static std::string readTextFile(std::string filename);
+    static std::string readTextFile(const std::string& filename);
 	static ImageData* readImageFile(std::string filename);
 	static void free(ImageData* imagedata);
 };
