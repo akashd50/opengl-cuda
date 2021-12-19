@@ -13,24 +13,24 @@ Quad* quad;
 Shader* single_color_shader, *texture_shader;
 //Framebuffer* default_framebuffer;
 Texture* test_texture;
-
-glm::vec3 s(int x, int y) {
-    float d = 1.0;
-    float fov = 60.0;
-    float aspect_ratio = ((float)MainOpenGL::WIDTH) / ((float)MainOpenGL::HEIGHT);
-    float h = d * (float)tan((M_PI * fov) / 180.0 / 2.0);
-    float w = h * aspect_ratio;
-
-    float top = h;
-    float bottom = -h;
-    float left = -w;
-    float right = w;
-
-    float u = left + (right - left) * (x) / ((float)MainOpenGL::WIDTH);
-    float v = bottom + (top - bottom) * (((float)MainOpenGL::HEIGHT) - y) / ((float)MainOpenGL::HEIGHT);
-
-    return glm::vec3(u, v, -d);
-}
+Scene* scene;
+//glm::vec3 s(int x, int y) {
+//    float d = 1.0;
+//    float fov = 60.0;
+//    float aspect_ratio = ((float)MainOpenGL::WIDTH) / ((float)MainOpenGL::HEIGHT);
+//    float h = d * (float)tan((M_PI * fov) / 180.0 / 2.0);
+//    float w = h * aspect_ratio;
+//
+//    float top = h;
+//    float bottom = -h;
+//    float left = -w;
+//    float right = w;
+//
+//    float u = left + (right - left) * (x) / ((float)MainOpenGL::WIDTH);
+//    float v = bottom + (top - bottom) * (((float)MainOpenGL::HEIGHT) - y) / ((float)MainOpenGL::HEIGHT);
+//
+//    return glm::vec3(u, v, -d);
+//}
 
 // -------------------------------------------------------------------------------------------------------
 const char* MainOpenGL::WINDOW_TITLE = "Raytracing with Cuda";
@@ -51,8 +51,10 @@ void MainOpenGL::init()
     quad->setTexture(test_texture);
     quad->build(texture_shader);
 
-    //MainCuda::doCalculation();
-    MainCuda::renderRayTracedScene(test_texture);
+    scene = new Scene();
+    scene->addObject(new Sphere(new Material(glm::vec3(1.0, 1.0, 0.0), glm::vec3(1.0)), 0.5, glm::vec3(0.0, 0.0, -6.0)));
+
+    MainCuda::renderRayTracedScene(test_texture, scene);
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(1.0, 1.0, 1.0, 1.0);

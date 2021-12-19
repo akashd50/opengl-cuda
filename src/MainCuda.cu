@@ -77,20 +77,19 @@ __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, floa
     return MIN_T;
 }
 
-__global__ void textureCompute(cudaSurfaceObject_t image, Scene* scene)
+__global__ void textureCompute(cudaSurfaceObject_t image, CudaScene* scene)
 {
     // blockIdx - index of block in grid
     // theadIdx - index of thread in block
     unsigned int x = threadIdx.x;
     unsigned int y = blockIdx.x;
 
-    //float3 sphere = make_float3(0.0, 0.0, -5.0);
     float3 eye = make_float3(0.0, 0.0, 0.0);
-    float radius = 0.5;
     float3 ray = cast_ray(x, y, 512, 512) - eye;
     uchar4 color;
+    //printf("IN KERNEL: num_obj(%d) obj_info(%d)", scene->numObjects, scene->objects[0]->type);
     for (int i=0; i<scene->numObjects; i++) {
-        Sphere* sp = &scene->objects[i];
+        CudaSphere* sp = (CudaSphere*)scene->objects[i];
         float sphereHit = check_hit_on_sphere(eye, ray, sp->position, sp->radius);
         if (sphereHit >= 0 && sphereHit != MIN_T) {
             color = toRGBA(sp->material.ambient);
@@ -103,28 +102,8 @@ __global__ void textureCompute(cudaSurfaceObject_t image, Scene* scene)
     surf2Dwrite(color, image, x * sizeof(color), y, cudaBoundaryModeClamp);
 }
 
-#define check(ans) { _check((ans), __FILE__, __LINE__); }
-inline void _check(cudaError_t code, char *file, int line)
-{
-    if (code != cudaSuccess) {
-        fprintf(stderr,"CUDA Error: %s %s %d\n", cudaGetErrorString(code), file, line);
-        exit(code);
-    }
-}
 
-Scene* allocateScene() {
-    Material material(make_float3(1.0, 0.5, 0.1), make_float3(1.0, 1.0, 1.0));
-    Sphere sphere(material, 1.0, make_float3(0.0, 0.0, -5.0));
-    auto scene = new Scene();
-    scene->addObject(sphere);
-
-    Scene* scenePtr;
-    check(cudaMalloc((void**)&scenePtr, sizeof(Scene)));
-    check(cudaMemcpy(scenePtr, scene, sizeof(Scene), cudaMemcpyHostToDevice));
-    return scenePtr;
-}
-
-void MainCuda::renderRayTracedScene(Texture* texture) {
+void MainCuda::renderRayTracedScene(Texture* texture, Scene* scene) {
     struct cudaGraphicsResource *vbo_res;
     // register this texture with CUDA
     //cudaGraphicsGLRegisterImage(&vbo_res, texture->getTextureId(),GL_TEXTURE_2D, cudaGraphicsMapFlagsReadOnly);
@@ -142,7 +121,59 @@ void MainCuda::renderRayTracedScene(Texture* texture) {
     cudaSurfaceObject_t viewCudaSurfaceObject;
     check(cudaCreateSurfaceObject(&viewCudaSurfaceObject, &viewCudaArrayResourceDesc));
 
-    textureCompute<<<512, 512>>>(viewCudaSurfaceObject, allocateScene());
+    textureCompute<<<512, 512>>>(viewCudaSurfaceObject, sceneToCudaScene(scene));
+}
+
+
+CudaMaterial materialToCudaMaterial(Material* material) {
+    CudaMaterial newMaterial(vec3ToFloat3(material->ambient), vec3ToFloat3(material->diffuse), vec3ToFloat3(material->specular),
+                             material->shininess, vec3ToFloat3(material->reflective), vec3ToFloat3(material->transmissive),
+                             material->refraction, material->roughness);
+    return newMaterial;
+}
+
+CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
+    switch (object->getType()) {
+        case SPHERE:
+            Sphere* sphere = (Sphere*)object;
+            CudaSphere newSphere(vec3ToFloat3(sphere->getPosition()), sphere->getRadius(), materialToCudaMaterial(object->getMaterial()));
+            CudaSphere* cudaPointer;
+            check(cudaMalloc((void**)&cudaPointer, sizeof(CudaSphere)));
+            check(cudaMemcpy(cudaPointer, &newSphere, sizeof(CudaSphere), cudaMemcpyHostToDevice));
+            return cudaPointer;
+    }
+    return nullptr;
+}
+
+CudaScene* sceneToCudaScene(Scene* scene) {
+    int numObjects = scene->getObjects().size();
+    auto objects = new CudaRTObject*[numObjects];
+    int index = 0;
+    for (RTObject* obj : scene->getObjects()) {
+        CudaRTObject* cudaPtr = rtObjectToCudaRTObject(obj);
+        objects[index] = cudaPtr;
+    }
+
+    CudaRTObject** cudaObjectsPtr;
+    check(cudaMalloc((void**)&cudaObjectsPtr, numObjects * sizeof(CudaRTObject*)));
+    check(cudaMemcpy(cudaObjectsPtr, objects, numObjects * sizeof(CudaRTObject*), cudaMemcpyHostToDevice));
+    CudaScene cudaScene(cudaObjectsPtr, numObjects);
+    CudaScene* cudaScenePtr;
+    check(cudaMalloc((void**)&cudaScenePtr, sizeof(CudaScene)));
+    check(cudaMemcpy(cudaScenePtr, &cudaScene, sizeof(CudaScene), cudaMemcpyHostToDevice));
+
+//    CudaRTObject** objs = new CudaRTObject*[1];
+//    check(cudaMemcpy(objs, cudaObjectsPtr, sizeof(CudaRTObject*), cudaMemcpyDeviceToHost))
+//
+//    CudaSphere* sphere = (CudaSphere*)malloc(sizeof(CudaSphere));
+//    check(cudaMemcpy(sphere, objs[0], sizeof(CudaSphere), cudaMemcpyDeviceToHost))
+    //cudaMemR
+    return cudaScenePtr;
+}
+
+
+float3 vec3ToFloat3(glm::vec3 vec) {
+    return make_float3(vec.x, vec.y, vec.z);
 }
 
 void MainCuda::doCalculation() {

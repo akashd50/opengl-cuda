@@ -12,6 +12,15 @@ const int SPHERE = 1;
 const int MESH = 2;
 const int PLANE = 3;
 
+#define check(ans) { _check((ans), __FILE__, __LINE__); }
+inline void _check(cudaError_t code, char *file, int line)
+{
+    if (code != cudaSuccess) {
+        fprintf(stderr,"CUDA Error: %s %s %d\n", cudaGetErrorString(code), file, line);
+        exit(code);
+    }
+}
+
 class Material {
 public:
     glm::vec3 ambient;
@@ -57,12 +66,16 @@ public:
         return material;
     }
 
+    inline int getType() {
+        return type;
+    }
+
     inline ~RTObject() {
         delete material;
     }
 };
 
-class Sphere: RTObject {
+class Sphere: public RTObject {
 private:
     glm::vec3 position;
     float radius;
@@ -104,8 +117,8 @@ public:
         Scene::objects->push_back(_object);
     }
 
-    inline std::vector<RTObject*>* getObjects() {
-        return objects;
+    inline std::vector<RTObject*> getObjects() {
+        return *objects;
     }
 
     inline ~Scene() {
@@ -158,7 +171,7 @@ public:
     inline CudaRTObject(int _type, CudaMaterial _material) : type(_type), material(_material) {}
 };
 
-class CudaSphere: CudaRTObject {
+class CudaSphere: public CudaRTObject {
 public:
     float3 position;
     float radius;
@@ -168,13 +181,18 @@ public:
 
 class CudaScene {
 public:
-    CudaRTObject* objects;
+    CudaRTObject** objects;
     int numObjects;
-    inline CudaScene(CudaRTObject* _objects , int _numObjects): objects(_objects), numObjects(_numObjects) {}
+    CudaScene(CudaRTObject** _objects , int _numObjects): objects(_objects), numObjects(_numObjects) {}
 };
+
+float3 vec3ToFloat3(glm::vec3 vec);
+CudaMaterial materialToCudaMaterial(Material* material);
+CudaRTObject* rtObjectToCudaRTObject(RTObject* object);
+CudaScene* sceneToCudaScene(Scene* scene);
 
 class MainCuda {
 public:
-    static void renderRayTracedScene(Texture* texture);
+    static void renderRayTracedScene(Texture* texture, Scene* scene);
     static void doCalculation();
 };
