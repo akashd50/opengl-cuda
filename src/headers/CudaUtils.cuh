@@ -176,15 +176,18 @@ public:
 };
 
 __device__ const float MIN_T = -9999.0;
+__device__ const float MAX_T = 999999.0;
 __device__ const float HIT_T_OFFSET = 0.01;
 
 struct HitInfo {
     CudaRTObject* object;
     float t;
-    __device__ HitInfo(): t(MIN_T) {}
+    float3 hitPoint;
+    int index;
+    __device__ HitInfo(): t(MAX_T) {}
     __device__ HitInfo(CudaRTObject* _object, float _t) : object(_object), t(_t) {}
     __device__ bool isHit() {
-        return t != MIN_T;
+        return t != MAX_T;
     }
 };
 //----------------------------------------------------------------------------------------------------------------------
@@ -197,6 +200,7 @@ public:
     ~CudaUtils();
     void initializeRenderSurface(Texture* texture);
     void renderScene(CudaScene* cudaScene);
+    void onClick(int x, int y, CudaScene* cudaScene);
     void deviceInformation();
 };
 

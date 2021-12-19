@@ -38,11 +38,11 @@ void MainOpenGL::init()
 
     scene = new Scene();
     scene->addObject(new Sphere(
-            new Material(glm::vec3(1.0, 1.0, 0.0), glm::vec3(1.0)),
-            0.5, glm::vec3(0.0, 0.0, -6.0)));
+            new Material(glm::vec3(0.0, 1.0, 1.0), glm::vec3(1.0)),
+            1.0, glm::vec3(0.0, 0.0, -6.0)));
     scene->addObject(new Sphere(
             new Material(glm::vec3(1.0, 0.0, 0.0), glm::vec3(1.0)),
-            0.5, glm::vec3(-1.5, 0.0, -4.0)));
+            0.5, glm::vec3(-1.0, 0.0, -4.0)));
     cudaScene = allocateCudaScene(scene);
 
     cudaUtils = new CudaUtils();
@@ -85,6 +85,7 @@ void MainOpenGL::keyboard(unsigned char key, int x, int y)
 void MainOpenGL::mouse(int button, int state, int x, int y)
 {
     if (state == GLUT_DOWN) {
+        cudaUtils->onClick(x, y, cudaScene);
     }
 }
 

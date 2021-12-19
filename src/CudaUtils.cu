@@ -4,6 +4,25 @@
 #include "headers/CudaUtils.cuh"
 #include <cuda.h>
 #include <cuda_gl_interop.h>
+#include <vector_functions.h>
+
+//----------OPERATORS---------------------------------------------------------------------------------------------------
+
+__device__ uchar4 operator+(const uchar4 &a, const uchar4 &b) {
+    return make_uchar4(a.x+b.x, a.y+b.y, a.z+b.z, a.w+b.z);
+}
+
+__device__ float3 operator*(const float3 &a, const float &b) {
+    return make_float3(a.x+b, a.y+b, a.z+b);
+}
+
+__device__ float3 operator*(const float &a, const float3 &b) {
+    return b * a;
+}
+
+__device__ float3 operator/(const float3 &a, const float &b) {
+    return make_float3(a.x/b, a.y/b, a.z/b);
+}
 
 __device__ float3 operator+(const float3 &a, const float3 &b) {
     return make_float3(a.x+b.x, a.y+b.y, a.z+b.z);
@@ -13,6 +32,8 @@ __device__ float3 operator-(const float3 &a, const float3 &b) {
     return make_float3(a.x-b.x, a.y-b.y, a.z-b.z);
 }
 
+//----------VECTOR--OPERATIONS------------------------------------------------------------------------------------------
+
 __device__ float dot(const float3 &a, const float3 &b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
@@ -20,6 +41,17 @@ __device__ float dot(const float3 &a, const float3 &b) {
 __device__ uchar4 toRGBA(const float3 &a) {
     return make_uchar4(int(a.x * 255), int(a.y * 255), int(a.z * 255), 255);
 }
+
+__device__ float3 t_to_vec(float3 e, float3 d, float t) {
+    return e + t * d;
+}
+
+__device__ float3 normalize(float3 a) {
+    float mag = sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+    return make_float3(a.x, a.y, a.z)/mag;
+}
+
+//----------RT-FUNCTIONS------------------------------------------------------------------------------------------------
 
 __device__ float3 cast_ray(unsigned int x, unsigned int y, int width, int height) {
     float d = 1.0;
@@ -36,6 +68,16 @@ __device__ float3 cast_ray(unsigned int x, unsigned int y, int width, int height
     float u = left + (right - left) * float(x) / ((float)width);
     float v = bottom + (top - bottom) * (((float)height) - float(y)) / ((float)height);
     return make_float3(u, v, -d);
+}
+
+__device__ float3 getReflectedRay(float3 e, float3 d, float3 normal) {
+    float3 ray_dir = normalize(d);
+    return ray_dir - 2.0f * normal * dot(ray_dir, normal);
+}
+
+__device__ float3 getSphereNormal(float3 point, CudaSphere* sphere) {
+    float3 normal = point - sphere->position;
+    return normalize(normal);
 }
 
 __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, float radius) {
@@ -60,7 +102,7 @@ __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, floa
         float t1 = init / ray_dot_ray;
         return t1;
     }
-    return MIN_T;
+    return MAX_T;
 }
 
 __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene) {
@@ -68,16 +110,41 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene) {
     for (int i=0; i<scene->numObjects; i++) {
         CudaSphere* sphere = (CudaSphere*)scene->objects[i];
         float sphereHit = check_hit_on_sphere(eye, ray, sphere->position, sphere->radius);
-        if (sphereHit >= 0 && sphereHit != MIN_T) {
+        if (sphereHit >= HIT_T_OFFSET && sphereHit < hit.t) {
             hit.object = sphere;
             hit.t = sphereHit;
-            return hit;
+            hit.hitPoint = t_to_vec(eye, ray, sphereHit);
+            hit.index = i;
         }
     }
     return hit;
 }
 
-__global__ void traceRays(cudaSurfaceObject_t image, CudaScene* scene)
+__device__ uchar4 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int bounceIndex, bool debug) {
+    if (bounceIndex > 1) {
+        //printf("Bounce greater than 1 ; %d", bounceIndex);
+        return make_uchar4(0, 0, 0, 255);
+    }
+
+    uchar4 color;
+    HitInfo hitInfo = doHitTest(eye, ray, scene);
+    if (hitInfo.isHit()) {
+        float3 reflectedRay = normalize(getReflectedRay(eye, ray, getSphereNormal(hitInfo.hitPoint, (CudaSphere*)hitInfo.object)));
+
+        if (debug) {
+            printf("HitInfo(%d); Hit(%f, %f, %f) Reflected(%f, %f, %f)\n", hitInfo.index, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
+                   reflectedRay.x, reflectedRay.y, reflectedRay.z);
+        }
+
+        color = toRGBA(hitInfo.object->material.ambient) + traceSingleRay(hitInfo.hitPoint, reflectedRay, scene, bounceIndex + 1, debug);
+    } else {
+        color = make_uchar4(0, 0, 0, 255);
+    }
+
+    return color;
+}
+
+__global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 {
     // blockIdx - index of block in grid
     // theadIdx - index of thread in block
@@ -86,16 +153,16 @@ __global__ void traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
-    uchar4 color;
-    //printf("IN KERNEL: num_obj(%d) obj_info(%d)", scene->numObjects, scene->objects[0]->type);
-    HitInfo hitInfo = doHitTest(eye, ray, scene);
-    if (hitInfo.isHit()) {
-        color = toRGBA(hitInfo.object->material.ambient);
-    } else {
-        color = make_uchar4(0, 0, 0, 255);
-    }
+    uchar4 color = traceSingleRay(eye, ray, scene, 0, false);
 
     surf2Dwrite(color, image, x * sizeof(color), y, cudaBoundaryModeClamp);
+}
+
+__global__ void kernel_traceSingleRay(int x, int y, CudaScene* scene)
+{
+    float3 eye = make_float3(0.0, 0.0, 0.0);
+    float3 ray = cast_ray(x, y, 512, 512) - eye;
+    traceSingleRay(eye, ray, scene, 0, true);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -137,7 +204,11 @@ void CudaUtils::initializeRenderSurface(Texture* texture) {
 }
 
 void CudaUtils::renderScene(CudaScene* cudaScene) {
-    traceRays<<<512, 512>>>(CudaUtils::viewCudaSurfaceObject, cudaScene);
+    kernel_traceRays<<<512, 512>>>(CudaUtils::viewCudaSurfaceObject, cudaScene);
+}
+
+void CudaUtils::onClick(int x, int y, CudaScene* cudaScene) {
+    kernel_traceSingleRay<<<1, 1>>>(x, y, cudaScene);
 }
 
 void CudaUtils::deviceInformation() {
