@@ -175,6 +175,18 @@ public:
     CudaScene(CudaRTObject** _objects , int _numObjects): objects(_objects), numObjects(_numObjects) {}
 };
 
+__device__ const float MIN_T = -9999.0;
+__device__ const float HIT_T_OFFSET = 0.01;
+
+struct HitInfo {
+    CudaRTObject* object;
+    float t;
+    __device__ HitInfo(): t(MIN_T) {}
+    __device__ HitInfo(CudaRTObject* _object, float _t) : object(_object), t(_t) {}
+    __device__ bool isHit() {
+        return t != MIN_T;
+    }
+};
 //----------------------------------------------------------------------------------------------------------------------
 
 class CudaUtils {

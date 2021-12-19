@@ -21,19 +21,6 @@ __device__ uchar4 toRGBA(const float3 &a) {
     return make_uchar4(int(a.x * 255), int(a.y * 255), int(a.z * 255), 255);
 }
 
-__global__
-void add(int n, float *x, float *y)
-{
-
-    // blockIdx - index of block in grid
-    // theadIdx - index of thread in block
-    int index = threadIdx.x;
-    printf("Index %d", index);
-    int stride = blockDim.x;
-    for (int i = index; i < n; i+=stride)
-        y[i] = x[i] + y[i];
-}
-
 __device__ float3 cast_ray(unsigned int x, unsigned int y, int width, int height) {
     float d = 1.0;
     float fov = 60.0;
@@ -50,9 +37,6 @@ __device__ float3 cast_ray(unsigned int x, unsigned int y, int width, int height
     float v = bottom + (top - bottom) * (((float)height) - float(y)) / ((float)height);
     return make_float3(u, v, -d);
 }
-
-__device__ const float MIN_T = -9999.0;
-__device__ const float HIT_T_OFFSET = 0.01;
 
 __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, float radius) {
     float3 center_2_eye = eye - center;
@@ -79,7 +63,21 @@ __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, floa
     return MIN_T;
 }
 
-__global__ void textureCompute(cudaSurfaceObject_t image, CudaScene* scene)
+__device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene) {
+    HitInfo hit;
+    for (int i=0; i<scene->numObjects; i++) {
+        CudaSphere* sphere = (CudaSphere*)scene->objects[i];
+        float sphereHit = check_hit_on_sphere(eye, ray, sphere->position, sphere->radius);
+        if (sphereHit >= 0 && sphereHit != MIN_T) {
+            hit.object = sphere;
+            hit.t = sphereHit;
+            return hit;
+        }
+    }
+    return hit;
+}
+
+__global__ void traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 {
     // blockIdx - index of block in grid
     // theadIdx - index of thread in block
@@ -90,15 +88,11 @@ __global__ void textureCompute(cudaSurfaceObject_t image, CudaScene* scene)
     float3 ray = cast_ray(x, y, 512, 512) - eye;
     uchar4 color;
     //printf("IN KERNEL: num_obj(%d) obj_info(%d)", scene->numObjects, scene->objects[0]->type);
-    for (int i=0; i<scene->numObjects; i++) {
-        CudaSphere* sp = (CudaSphere*)scene->objects[i];
-        float sphereHit = check_hit_on_sphere(eye, ray, sp->position, sp->radius);
-        if (sphereHit >= 0 && sphereHit != MIN_T) {
-            color = toRGBA(sp->material.ambient);
-            break;
-        } else {
-            color = make_uchar4(0, 0, 0, 255);
-        }
+    HitInfo hitInfo = doHitTest(eye, ray, scene);
+    if (hitInfo.isHit()) {
+        color = toRGBA(hitInfo.object->material.ambient);
+    } else {
+        color = make_uchar4(0, 0, 0, 255);
     }
 
     surf2Dwrite(color, image, x * sizeof(color), y, cudaBoundaryModeClamp);
@@ -143,7 +137,7 @@ void CudaUtils::initializeRenderSurface(Texture* texture) {
 }
 
 void CudaUtils::renderScene(CudaScene* cudaScene) {
-    textureCompute<<<512, 512>>>(CudaUtils::viewCudaSurfaceObject, cudaScene);
+    traceRays<<<512, 512>>>(CudaUtils::viewCudaSurfaceObject, cudaScene);
 }
 
 void CudaUtils::deviceInformation() {
