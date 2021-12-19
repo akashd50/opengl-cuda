@@ -2,35 +2,20 @@
 #include <glm/glm.hpp>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
-#include "headers/MainCuda.cuh"
+#include "headers/CudaUtils.cuh"
 #include "headers/MainOpenGL.h"
 #include "headers/Quad.h"
 
 #define M_PI 3.14159265358979323846264338327950288
 
 //----------------------------------------------------------------------------
+CudaUtils* cudaUtils;
+CudaScene* cudaScene;
 Quad* quad;
 Shader* single_color_shader, *texture_shader;
 //Framebuffer* default_framebuffer;
 Texture* test_texture;
 Scene* scene;
-//glm::vec3 s(int x, int y) {
-//    float d = 1.0;
-//    float fov = 60.0;
-//    float aspect_ratio = ((float)MainOpenGL::WIDTH) / ((float)MainOpenGL::HEIGHT);
-//    float h = d * (float)tan((M_PI * fov) / 180.0 / 2.0);
-//    float w = h * aspect_ratio;
-//
-//    float top = h;
-//    float bottom = -h;
-//    float left = -w;
-//    float right = w;
-//
-//    float u = left + (right - left) * (x) / ((float)MainOpenGL::WIDTH);
-//    float v = bottom + (top - bottom) * (((float)MainOpenGL::HEIGHT) - y) / ((float)MainOpenGL::HEIGHT);
-//
-//    return glm::vec3(u, v, -d);
-//}
 
 // -------------------------------------------------------------------------------------------------------
 const char* MainOpenGL::WINDOW_TITLE = "Raytracing with Cuda";
@@ -52,9 +37,18 @@ void MainOpenGL::init()
     quad->build(texture_shader);
 
     scene = new Scene();
-    scene->addObject(new Sphere(new Material(glm::vec3(1.0, 1.0, 0.0), glm::vec3(1.0)), 0.5, glm::vec3(0.0, 0.0, -6.0)));
+    scene->addObject(new Sphere(
+            new Material(glm::vec3(1.0, 1.0, 0.0), glm::vec3(1.0)),
+            0.5, glm::vec3(0.0, 0.0, -6.0)));
+    scene->addObject(new Sphere(
+            new Material(glm::vec3(1.0, 0.0, 0.0), glm::vec3(1.0)),
+            0.5, glm::vec3(-1.5, 0.0, -4.0)));
+    cudaScene = allocateCudaScene(scene);
 
-    MainCuda::renderRayTracedScene(test_texture, scene);
+    cudaUtils = new CudaUtils();
+    cudaUtils->deviceInformation();
+    cudaUtils->initializeRenderSurface(test_texture);
+    cudaUtils->renderScene(cudaScene);
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(1.0, 1.0, 1.0, 1.0);
@@ -64,20 +58,14 @@ void MainOpenGL::init()
 
 void MainOpenGL::display(void)
 {
-    //default_framebuffer->bind(true);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(1.0, 0.5, 0.5, 1.0);
 
     quad->getShader()->useProgram();
     quad->applyTransformations();
     quad->onDrawFrame();
-//
-//    glFinish();
-    // MainOpenCL::onDrawFrame();
-    //default_framebuffer->unbind();
 
     glutSwapBuffers();
-    //glutPostRedisplay();
 }
 
 //----------------------------------------------------------------------------

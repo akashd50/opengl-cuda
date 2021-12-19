@@ -1,7 +1,9 @@
 #pragma once
 #include <iostream>
 #include "glm/glm.hpp"
-#include "headers/MainCuda.cuh"
+#include "headers/CudaUtils.cuh"
+#include <cuda.h>
+#include <cuda_gl_interop.h>
 
 __device__ float3 operator+(const float3 &a, const float3 &b) {
     return make_float3(a.x+b.x, a.y+b.y, a.z+b.z);
@@ -102,8 +104,27 @@ __global__ void textureCompute(cudaSurfaceObject_t image, CudaScene* scene)
     surf2Dwrite(color, image, x * sizeof(color), y, cudaBoundaryModeClamp);
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------Cuda Utils Class Definition----------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 
-void MainCuda::renderRayTracedScene(Texture* texture, Scene* scene) {
+#define check(ans) { _check((ans), __FILE__, __LINE__); }
+inline void _check(cudaError_t code, char *file, int line)
+{
+    if (code != cudaSuccess) {
+        fprintf(stderr,"CUDA Error: %s %s %d\n", cudaGetErrorString(code), file, line);
+        exit(code);
+    }
+}
+
+CudaUtils::CudaUtils() {
+}
+
+CudaUtils::~CudaUtils() {
+
+}
+
+void CudaUtils::initializeRenderSurface(Texture* texture) {
     struct cudaGraphicsResource *vbo_res;
     // register this texture with CUDA
     //cudaGraphicsGLRegisterImage(&vbo_res, texture->getTextureId(),GL_TEXTURE_2D, cudaGraphicsMapFlagsReadOnly);
@@ -118,12 +139,49 @@ void MainCuda::renderRayTracedScene(Texture* texture, Scene* scene) {
     viewCudaArrayResourceDesc.resType = cudaResourceTypeArray;
     viewCudaArrayResourceDesc.res.array.array = viewCudaArray;
 
-    cudaSurfaceObject_t viewCudaSurfaceObject;
     check(cudaCreateSurfaceObject(&viewCudaSurfaceObject, &viewCudaArrayResourceDesc));
-
-    textureCompute<<<512, 512>>>(viewCudaSurfaceObject, sceneToCudaScene(scene));
 }
 
+void CudaUtils::renderScene(CudaScene* cudaScene) {
+    textureCompute<<<512, 512>>>(CudaUtils::viewCudaSurfaceObject, cudaScene);
+}
+
+void CudaUtils::deviceInformation() {
+    int nDevices;
+    cudaGetDeviceCount(&nDevices);
+    for (int i = 0; i < nDevices; i++) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, i);
+        printf("Device Number: %d\n", i);
+        printf("  Device name: %s\n", prop.name);
+        printf("  Memory Clock Rate (KHz): %d\n",
+               prop.memoryClockRate);
+        printf("  Memory Bus Width (bits): %d\n",
+               prop.memoryBusWidth);
+        printf("  Peak Memory Bandwidth (GB/s): %f\n\n",
+               2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6);
+        std::cout << "  Max Threads per SM: " << prop.maxThreadsPerMultiProcessor << std::endl;
+        std::cout << "  Max Thread Blocks per SM: " << prop.maxBlocksPerMultiProcessor << std::endl;
+        std::cout << "  Max Threads per block: " << prop.maxThreadsPerBlock << std::endl;
+
+        CUdevice device;
+        cuDeviceGet(&device, i);
+        int major, minor;
+        //cuDeviceComputeCapability(&major, &minor, device);
+        cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device);
+        cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device);
+        std::cout << "Minor: " << minor << " \nMajor: " << major << std::endl;
+    }
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------Additional Utilities-----------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+
+float3 vec3ToFloat3(glm::vec3 vec) {
+    return make_float3(vec.x, vec.y, vec.z);
+}
 
 CudaMaterial materialToCudaMaterial(Material* material) {
     CudaMaterial newMaterial(vec3ToFloat3(material->ambient), vec3ToFloat3(material->diffuse), vec3ToFloat3(material->specular),
@@ -145,13 +203,13 @@ CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
     return nullptr;
 }
 
-CudaScene* sceneToCudaScene(Scene* scene) {
+CudaScene* allocateCudaScene(Scene* scene) {
     int numObjects = scene->getObjects().size();
     auto objects = new CudaRTObject*[numObjects];
     int index = 0;
     for (RTObject* obj : scene->getObjects()) {
         CudaRTObject* cudaPtr = rtObjectToCudaRTObject(obj);
-        objects[index] = cudaPtr;
+        objects[index++] = cudaPtr;
     }
 
     CudaRTObject** cudaObjectsPtr;
@@ -171,61 +229,9 @@ CudaScene* sceneToCudaScene(Scene* scene) {
     return cudaScenePtr;
 }
 
-
-float3 vec3ToFloat3(glm::vec3 vec) {
-    return make_float3(vec.x, vec.y, vec.z);
-}
-
-void MainCuda::doCalculation() {
-    int nDevices;
-
-    cudaGetDeviceCount(&nDevices);
-    for (int i = 0; i < nDevices; i++) {
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, i);
-        printf("Device Number: %d\n", i);
-        printf("  Device name: %s\n", prop.name);
-        printf("  Memory Clock Rate (KHz): %d\n",
-               prop.memoryClockRate);
-        printf("  Memory Bus Width (bits): %d\n",
-               prop.memoryBusWidth);
-        printf("  Peak Memory Bandwidth (GB/s): %f\n\n",
-               2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6);
-        std::cout << "  Max Threads per SM: " << prop.maxThreadsPerMultiProcessor << std::endl;
-        std::cout << "  Max Thread Blocks per SM: " << prop.maxBlocksPerMultiProcessor << std::endl;
-        std::cout << "  Max Threads per block: " << prop.maxThreadsPerBlock << std::endl;
+void cleanCudaScene(CudaScene* scene) {
+    for (int i=0; i<scene->numObjects; i++) {
+        cudaFree(scene->objects[i]);
     }
-
-    glm::vec3 a;
-    a.x = 3;
-    std::cout << "A is: " << a.x << std::endl;
-
-    int N = 1<<20; // 1M elements
-
-    // Allocate Unified Memory -- accessible from CPU or GPU
-    float *x, *y;
-    cudaMallocManaged(&x, N*sizeof(float));
-    cudaMallocManaged(&y, N*sizeof(float));
-
-    // initialize x and y arrays on the host
-    for (int i = 0; i < N; i++) {
-        x[i] = 1.0f;
-        y[i] = 2.0f;
-    }
-
-    // Run kernel on 1M elements on the GPU
-    add<<<1, 1024>>>(N, x, y);
-    cudaDeviceSynchronize();
-
-    // Check for errors (all values should be 3.0f)
-    float maxError = 0.0f;
-    std::cout << y[0] << std::endl;
-    for (int i = 0; i < N; i++) {
-        maxError = fmax(maxError, fabs(y[i] - 3.0f));
-    }
-    std::cout << "Max error: " << maxError << std::endl;
-
-    // Free memory
-    cudaFree(x);
-    cudaFree(y);
+    cudaFree(scene);
 }

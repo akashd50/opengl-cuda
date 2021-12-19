@@ -1,25 +1,14 @@
 #pragma once
 #include "Texture.h"
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
-#include <surface_functions.h>
-#include <surface_indirect_functions.h>
 #include <vector_types.h>
 #include <vector>
+#include <surface_functions.h>
+#include <surface_indirect_functions.h>
+#include <cuda_runtime.h>
 
 const int SPHERE = 1;
 const int MESH = 2;
 const int PLANE = 3;
-
-#define check(ans) { _check((ans), __FILE__, __LINE__); }
-inline void _check(cudaError_t code, char *file, int line)
-{
-    if (code != cudaSuccess) {
-        fprintf(stderr,"CUDA Error: %s %s %d\n", cudaGetErrorString(code), file, line);
-        exit(code);
-    }
-}
 
 class Material {
 public:
@@ -186,13 +175,23 @@ public:
     CudaScene(CudaRTObject** _objects , int _numObjects): objects(_objects), numObjects(_numObjects) {}
 };
 
+//----------------------------------------------------------------------------------------------------------------------
+
+class CudaUtils {
+private:
+    cudaSurfaceObject_t viewCudaSurfaceObject;
+public:
+    CudaUtils();
+    ~CudaUtils();
+    void initializeRenderSurface(Texture* texture);
+    void renderScene(CudaScene* cudaScene);
+    void deviceInformation();
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+
 float3 vec3ToFloat3(glm::vec3 vec);
 CudaMaterial materialToCudaMaterial(Material* material);
 CudaRTObject* rtObjectToCudaRTObject(RTObject* object);
-CudaScene* sceneToCudaScene(Scene* scene);
-
-class MainCuda {
-public:
-    static void renderRayTracedScene(Texture* texture, Scene* scene);
-    static void doCalculation();
-};
+CudaScene* allocateCudaScene(Scene* scene);
+void cleanCudaScene(CudaScene* scene);
