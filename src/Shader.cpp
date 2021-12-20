@@ -29,7 +29,7 @@ Shader::Shader(std::string vShader, std::string fShader) {
 void Shader::generateVShader(std::string filename) {
     vertexShader = glCreateShader(GL_VERTEX_SHADER);
 
-    std::string shaderCode = FileReader::readTextFile(filename);
+    std::string shaderCode = Utils::readTextFile(filename);
     const char* shaderSource = shaderCode.c_str();
 
     glShaderSource(vertexShader, 1, &shaderSource, NULL);
@@ -48,7 +48,7 @@ void Shader::generateVShader(std::string filename) {
 void Shader::generateFShader(std::string filename) {
     fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 
-    std::string shaderCode = FileReader::readTextFile(filename);
+    std::string shaderCode = Utils::readTextFile(filename);
     const char* shaderSource = shaderCode.c_str();
 
     glShaderSource(fragmentShader, 1, &shaderSource, NULL);

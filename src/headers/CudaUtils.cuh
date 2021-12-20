@@ -72,9 +72,14 @@ public:
 };
 
 class Mesh: public RTObject {
-private:
-    std::vector<Triangle> triangles;
+    std::vector<Triangle*>* triangles;
+    Mesh(): RTObject(MESH) {
+        triangles = new std::vector<Triangle*>();
+    }
 
+    void addTriangle(Triangle* triangle) {
+        triangles->push_back(triangle);
+    }
 };
 
 class Sphere: public RTObject {

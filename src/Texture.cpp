@@ -1,5 +1,5 @@
 #include "headers/Texture.h"
-#include "headers/FileReader.h"
+#include "headers/Utils.h"
 
 GLuint getColorFormat(int numChannels) {
 	switch (numChannels)
@@ -26,7 +26,7 @@ Texture::Texture(int width, int height, GLuint format) {
 }
 
 Texture::Texture(std::string filename) {
-	ImageData* data = FileReader::readImageFile(filename);
+	ImageData* data = Utils::readImageFile(filename);
 	this->width = data->width;
 	this->height = data->height;
 	this->numChannels = data->numChannels;
@@ -51,7 +51,7 @@ Texture::Texture(std::string filename) {
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 
-	FileReader::free(data);
+    Utils::free(data);
 }
 
 Texture::~Texture() {
