@@ -13,7 +13,7 @@ __device__ uchar4 operator+(const uchar4 &a, const uchar4 &b) {
 }
 
 __device__ float3 operator*(const float3 &a, const float &b) {
-    return make_float3(a.x+b, a.y+b, a.z+b);
+    return make_float3(a.x*b, a.y*b, a.z*b);
 }
 
 __device__ float3 operator*(const float &a, const float3 &b) {
@@ -32,6 +32,10 @@ __device__ float3 operator-(const float3 &a, const float3 &b) {
     return make_float3(a.x-b.x, a.y-b.y, a.z-b.z);
 }
 
+__device__ float3 operator*(const float3 &a, const float3 &b) {
+    return make_float3(a.x*b.x, a.y*b.y, a.z*b.z);
+}
+
 //----------VECTOR--OPERATIONS------------------------------------------------------------------------------------------
 
 __device__ float dot(const float3 &a, const float3 &b) {
@@ -43,7 +47,7 @@ __device__ uchar4 toRGBA(const float3 &a) {
 }
 
 __device__ float3 t_to_vec(float3 e, float3 d, float t) {
-    return e + t * d;
+    return e + (t * d);
 }
 
 __device__ float3 normalize(float3 a) {
@@ -120,25 +124,25 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene) {
     return hit;
 }
 
-__device__ uchar4 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int bounceIndex, bool debug) {
+__device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int bounceIndex, bool debug) {
     if (bounceIndex > 1) {
         //printf("Bounce greater than 1 ; %d", bounceIndex);
-        return make_uchar4(0, 0, 0, 255);
+        return make_float3(0, 0, 0);
     }
 
-    uchar4 color;
+    float3 color;
     HitInfo hitInfo = doHitTest(eye, ray, scene);
     if (hitInfo.isHit()) {
         float3 reflectedRay = normalize(getReflectedRay(eye, ray, getSphereNormal(hitInfo.hitPoint, (CudaSphere*)hitInfo.object)));
 
         if (debug) {
-            printf("HitInfo(%d); Hit(%f, %f, %f) Reflected(%f, %f, %f)\n", hitInfo.index, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
+            printf("HitInfo(%d); Hit T(%f) @ (%f, %f, %f) - Reflected(%f, %f, %f)\n", hitInfo.index, hitInfo.t, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
                    reflectedRay.x, reflectedRay.y, reflectedRay.z);
         }
-
-        color = toRGBA(hitInfo.object->material.ambient) + traceSingleRay(hitInfo.hitPoint, reflectedRay, scene, bounceIndex + 1, debug);
+        float3 reflectedRayColor = hitInfo.object->material.reflective * traceSingleRay(hitInfo.hitPoint, reflectedRay, scene, bounceIndex + 1, debug);
+        color = hitInfo.object->material.diffuse + reflectedRayColor;
     } else {
-        color = make_uchar4(0, 0, 0, 255);
+        color = make_float3(0, 0, 0);
     }
 
     return color;
@@ -153,7 +157,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
-    uchar4 color = traceSingleRay(eye, ray, scene, 0, false);
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, false));
 
     surf2Dwrite(color, image, x * sizeof(color), y, cudaBoundaryModeClamp);
 }
@@ -162,6 +166,7 @@ __global__ void kernel_traceSingleRay(int x, int y, CudaScene* scene)
 {
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
+    printf("Ray (%f, %f, %f)\n", ray.x, ray.y, ray.z);
     traceSingleRay(eye, ray, scene, 0, true);
 }
 

@@ -37,12 +37,15 @@ void MainOpenGL::init()
     quad->build(texture_shader);
 
     scene = new Scene();
-    scene->addObject(new Sphere(
-            new Material(glm::vec3(0.0, 1.0, 1.0), glm::vec3(1.0)),
-            1.0, glm::vec3(0.0, 0.0, -6.0)));
-    scene->addObject(new Sphere(
-            new Material(glm::vec3(1.0, 0.0, 0.0), glm::vec3(1.0)),
-            0.5, glm::vec3(-1.0, 0.0, -4.0)));
+    auto mat1 = new Material(glm::vec3(0.1), glm::vec3(0.1, 0.5, 0.4),
+                                  glm::vec3(1.0), 1.0, glm::vec3(0.4),
+                                  glm::vec3(0.2), 1.0);
+    auto mat2 = new Material(glm::vec3(0.1), glm::vec3(0.6, 0.2, 0.1),
+                             glm::vec3(1.0), 1.0, glm::vec3(0.3),
+                             glm::vec3(0.2), 1.0);
+
+    scene->addObject(new Sphere(mat1, 1.0, glm::vec3(0.0, 0.0, -6.0)));
+    scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
     cudaScene = allocateCudaScene(scene);
 
     cudaUtils = new CudaUtils();
