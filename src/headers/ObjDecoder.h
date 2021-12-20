@@ -2,28 +2,22 @@
 #include <vector>
 #include <string>
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <fstream>
-#include <iostream>
-#include <stdio.h>
+#include "headers/CudaUtils.cuh"
 
-using namespace std;
+struct config {
+    int v1, v2, v3;
+    int n1, n2, n3;
+    int t1, t2, t3;
+};
 
-class ObjDecoder {
-    struct config {
-        int v1, v2, v3;
-        int n1, n2, n3;
-        int t1, t2, t3;
-    };
-
-private:
+struct RawData {
     std::vector<glm::vec3>* vertices;
-    std::vector<glm::vec3>* normals;
     std::vector<glm::vec2>* uvs;
     std::vector<config>* faceConfiguration;
+};
 
+class ObjDecoder {
 public:
-    ObjDecoder(string file);
-    void readFile(string filename);
+    static std::vector<Triangle*>* getTriangles(const std::string& file);
+    static RawData readFile(const std::string& filename);
 };

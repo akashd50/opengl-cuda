@@ -77,6 +77,8 @@ class Mesh: public RTObject {
         triangles = new std::vector<Triangle*>();
     }
 
+    Mesh(std::vector<Triangle*>* _triangles): RTObject(MESH), triangles(_triangles) {}
+
     void addTriangle(Triangle* triangle) {
         triangles->push_back(triangle);
     }

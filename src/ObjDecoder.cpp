@@ -1,74 +1,57 @@
 #pragma once
-#include <vector>
 #include <string>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <fstream>
 #include <iostream>
-#include <stdio.h>
 #include "headers/ObjDecoder.h"
 #include "headers/Utils.h"
 
-using namespace std;
-
-ObjDecoder::ObjDecoder(string file) {
-    readFile(file);
-    float* localVerts = new float[faceConfiguration->size() * 3 * 3];
-    int vertsIndex = 0;
-    for (int i = 0; i < faceConfiguration->size(); i++) {
-        config curr = faceConfiguration->at(i);
-
-        localVerts[vertsIndex++] = (float)vertices->at(curr.v1).x;
-        localVerts[vertsIndex++] = (float)vertices->at(curr.v1).y;
-        localVerts[vertsIndex++] = (float)vertices->at(curr.v1).z;
-
-        localVerts[vertsIndex++] = (float)vertices->at(curr.v2).x;
-        localVerts[vertsIndex++] = (float)vertices->at(curr.v2).y;
-        localVerts[vertsIndex++] = (float)vertices->at(curr.v2).z;
-
-        localVerts[vertsIndex++] = (float)vertices->at(curr.v3).x;
-        localVerts[vertsIndex++] = (float)vertices->at(curr.v3).y;
-        localVerts[vertsIndex++] = (float)vertices->at(curr.v3).z;
+std::vector<Triangle*>* ObjDecoder::getTriangles(const std::string& file) {
+    RawData rawData = readFile(file);
+    auto triangles = new std::vector<Triangle*>;
+    for (int i = 0; i < rawData.faceConfiguration->size(); i++) {
+        config curr = rawData.faceConfiguration->at(i);
+        glm::vec3 v1 = rawData.vertices->at(curr.v1);
+        glm::vec3 v2 = rawData.vertices->at(curr.v2);
+        glm::vec3 v3 = rawData.vertices->at(curr.v3);
+        triangles->push_back(new Triangle(v1, v2, v3));
     }
 
-    cout << "End of Loading" << "\n";
+    std::cout << "End of Loading" << "\n";
 
-    delete[] localVerts;
-
-    delete vertices;
-    delete normals;
-    delete uvs;
+    delete rawData.vertices;
+    delete rawData.uvs;
+    delete rawData.faceConfiguration;
+    return triangles;
 }
 
-void ObjDecoder::readFile(string filename) {
-    vertices = new vector<glm::vec3>;
-    normals = new vector<glm::vec3>;
-    uvs = new vector<glm::vec2>;
-    faceConfiguration = new vector<config>;
+RawData ObjDecoder::readFile(const std::string& filename) {
+    RawData rawData;
+    rawData.vertices = new std::vector<glm::vec3>;
+    rawData.uvs = new std::vector<glm::vec2>;
+    rawData.faceConfiguration = new std::vector<config>;
 
-    ifstream dataFile;
+    std::ifstream dataFile;
     dataFile.open(filename);
 
-    string line;
+    std::string line;
     if (dataFile.is_open()) {
-        cout << "File Opened! Reading now..." << "\n";
+        std::cout << "File Opened! Reading now..." << "\n";
 
         while (getline(dataFile, line)) {
-            vector<string>* lineTokens = Utils::tokenize(line, " ");
+            std::vector<std::string>* lineTokens = Utils::tokenize(line, " ");
 
             if (lineTokens->at(0) == "v") {
                 glm::vec3 vert = glm::vec3(stof(lineTokens->at(1)), stof(lineTokens->at(2)), stof(lineTokens->at(3)));
-                vertices->push_back(vert);
+                rawData.vertices->push_back(vert);
             }
             else if (lineTokens->at(0) == "vt") {
                 glm::vec2 uv = glm::vec2(stof(lineTokens->at(1)), stof(lineTokens->at(2)));
-                uvs->push_back(uv);
+                rawData.uvs->push_back(uv);
             }
             else if (lineTokens->at(0) == "f") {
-                vector<string>* faceV1Tokens = Utils::tokenize(lineTokens->at(1), "/");
-                vector<string>* faceV2Tokens = Utils::tokenize(lineTokens->at(2), "/");
-                vector<string>* faceV3Tokens = Utils::tokenize(lineTokens->at(3), "/");
+                std::vector<std::string>* faceV1Tokens = Utils::tokenize(lineTokens->at(1), "/");
+                std::vector<std::string>* faceV2Tokens = Utils::tokenize(lineTokens->at(2), "/");
+                std::vector<std::string>* faceV3Tokens = Utils::tokenize(lineTokens->at(3), "/");
 
                 config c;
                 c.v1 = stoi(faceV1Tokens->at(0)) - 1;
@@ -83,18 +66,14 @@ void ObjDecoder::readFile(string filename) {
                 c.n2 = stoi(faceV2Tokens->at(2)) - 1;
                 c.n3 = stoi(faceV3Tokens->at(2)) - 1;
 
-                faceConfiguration->push_back(c);
+                rawData.faceConfiguration->push_back(c);
             }
-            else if (lineTokens->at(0) == "vn") {
-                glm::vec3 normal = glm::vec3(stof(lineTokens->at(1)), stof(lineTokens->at(2)), stof(lineTokens->at(3)));
-                normals->push_back(normal);
-            }
-
             delete lineTokens;
         }
         dataFile.close();
     }
     else {
-        cout << "Error encountered during opening file: " + filename << "\n";
+        std::cout << "Error encountered during opening file: " + filename << "\n";
     }
+    return rawData;
 }
