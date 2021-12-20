@@ -139,8 +139,8 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int b
             printf("HitInfo(%d); Hit T(%f) @ (%f, %f, %f) - Reflected(%f, %f, %f)\n", hitInfo.index, hitInfo.t, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
                    reflectedRay.x, reflectedRay.y, reflectedRay.z);
         }
-        float3 reflectedRayColor = hitInfo.object->material.reflective * traceSingleRay(hitInfo.hitPoint, reflectedRay, scene, bounceIndex + 1, debug);
-        color = hitInfo.object->material.diffuse + reflectedRayColor;
+        float3 reflectedRayColor = hitInfo.object->material->reflective * traceSingleRay(hitInfo.hitPoint, reflectedRay, scene, bounceIndex + 1, debug);
+        color = hitInfo.object->material->diffuse + reflectedRayColor;
     } else {
         color = make_float3(0, 0, 0);
     }
@@ -253,11 +253,14 @@ float3 vec3ToFloat3(glm::vec3 vec) {
     return make_float3(vec.x, vec.y, vec.z);
 }
 
-CudaMaterial materialToCudaMaterial(Material* material) {
+CudaMaterial* materialToCudaMaterial(Material* material) {
     CudaMaterial newMaterial(vec3ToFloat3(material->ambient), vec3ToFloat3(material->diffuse), vec3ToFloat3(material->specular),
                              material->shininess, vec3ToFloat3(material->reflective), vec3ToFloat3(material->transmissive),
                              material->refraction, material->roughness);
-    return newMaterial;
+    CudaMaterial* cudaPtr;
+    check(cudaMalloc((void**)&cudaPtr, sizeof(CudaMaterial)));
+    check(cudaMemcpy(cudaPtr, &newMaterial, sizeof(CudaMaterial), cudaMemcpyHostToDevice));
+    return cudaPtr;
 }
 
 CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {

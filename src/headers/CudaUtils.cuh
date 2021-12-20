@@ -8,7 +8,8 @@
 
 const int SPHERE = 1;
 const int MESH = 2;
-const int PLANE = 3;
+const int TRIANGLE = 3;
+const int PLANE = 4;
 
 class Material {
 public:
@@ -62,6 +63,18 @@ public:
     inline ~RTObject() {
         delete material;
     }
+};
+
+class Triangle: public RTObject {
+public:
+    glm::vec3 a, b, c;
+    Triangle(glm::vec3 _a, glm::vec3 _b, glm::vec3 _c): RTObject(TRIANGLE), a(_a), b(_b), c(_c) {}
+};
+
+class Mesh: public RTObject {
+private:
+    std::vector<Triangle> triangles;
+
 };
 
 class Sphere: public RTObject {
@@ -155,16 +168,16 @@ public:
 class CudaRTObject {
 public:
     int type;
-    CudaMaterial material;
+    CudaMaterial* material;
     inline CudaRTObject(int _type) : type(_type) {}
-    inline CudaRTObject(int _type, CudaMaterial _material) : type(_type), material(_material) {}
+    inline CudaRTObject(int _type, CudaMaterial* _material) : type(_type), material(_material) {}
 };
 
 class CudaSphere: public CudaRTObject {
 public:
     float3 position;
     float radius;
-    inline CudaSphere(float3 _position, float _radius, CudaMaterial _material) : CudaRTObject(SPHERE, _material),
+    inline CudaSphere(float3 _position, float _radius, CudaMaterial* _material) : CudaRTObject(SPHERE, _material),
     position(_position), radius(_radius) {}
 };
 
@@ -175,11 +188,14 @@ public:
     CudaScene(CudaRTObject** _objects , int _numObjects): objects(_objects), numObjects(_numObjects) {}
 };
 
+//----------------------------------------------------------------------------------------------------------------------
+
 __device__ const float MIN_T = -9999.0;
 __device__ const float MAX_T = 999999.0;
 __device__ const float HIT_T_OFFSET = 0.01;
 
-struct HitInfo {
+class HitInfo {
+public:
     CudaRTObject* object;
     float t;
     float3 hitPoint;
@@ -190,6 +206,7 @@ struct HitInfo {
         return t != MAX_T;
     }
 };
+
 //----------------------------------------------------------------------------------------------------------------------
 
 class CudaUtils {
@@ -207,7 +224,19 @@ public:
 //----------------------------------------------------------------------------------------------------------------------
 
 float3 vec3ToFloat3(glm::vec3 vec);
-CudaMaterial materialToCudaMaterial(Material* material);
+CudaMaterial* materialToCudaMaterial(Material* material);
 CudaRTObject* rtObjectToCudaRTObject(RTObject* object);
 CudaScene* allocateCudaScene(Scene* scene);
 void cleanCudaScene(CudaScene* scene);
+
+//----------------------------------------------------------------------------------------------------------------------
+
+class BVHNode {
+    BVHNode *left, *right;
+    int objectIndex;
+    BVHNode() {
+
+    }
+
+
+};
