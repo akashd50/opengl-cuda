@@ -72,8 +72,11 @@ public:
 };
 
 class Mesh: public RTObject {
+public:
     std::vector<Triangle*>* triangles;
+    float top, bottom, left, right, front, back;
     Mesh(): RTObject(MESH) {
+        top = 0; bottom = 0; left = 0; right = 0; front = 0; back = 0;
         triangles = new std::vector<Triangle*>();
     }
 
@@ -180,11 +183,23 @@ public:
     inline CudaRTObject(int _type, CudaMaterial* _material) : type(_type), material(_material) {}
 };
 
+class CudaTriangle: public CudaRTObject {
+public:
+    float3 a, b, c;
+    CudaTriangle(float3 _a, float3 _b, float3 _c): CudaRTObject(TRIANGLE), a(_a), b(_b), c(_c) {}
+};
+
+class CudaMesh: public CudaRTObject {
+public:
+    CudaTriangle** triangles;
+    CudaMesh(CudaTriangle** _triangles): CudaRTObject(MESH), triangles(_triangles) {}
+};
+
 class CudaSphere: public CudaRTObject {
 public:
     float3 position;
     float radius;
-    inline CudaSphere(float3 _position, float _radius, CudaMaterial* _material) : CudaRTObject(SPHERE, _material),
+    inline CudaSphere(float3 _position, float _radius, CudaMaterial* _material): CudaRTObject(SPHERE, _material),
     position(_position), radius(_radius) {}
 };
 

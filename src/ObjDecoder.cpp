@@ -4,16 +4,31 @@
 #include <iostream>
 #include "headers/ObjDecoder.h"
 #include "headers/Utils.h"
+#include "headers/CudaUtils.cuh"
 
-std::vector<Triangle*>* ObjDecoder::getTriangles(const std::string& file) {
+Mesh* ObjDecoder::createMesh(const std::string& file) {
+    Mesh* mesh = new Mesh();
     RawData rawData = readFile(file);
-    auto triangles = new std::vector<Triangle*>;
+    //auto triangles = new std::vector<Triangle*>;
     for (int i = 0; i < rawData.faceConfiguration->size(); i++) {
         config curr = rawData.faceConfiguration->at(i);
         glm::vec3 v1 = rawData.vertices->at(curr.v1);
         glm::vec3 v2 = rawData.vertices->at(curr.v2);
         glm::vec3 v3 = rawData.vertices->at(curr.v3);
-        triangles->push_back(new Triangle(v1, v2, v3));
+        mesh->addTriangle(new Triangle(v1, v2, v3));
+
+        float maxX = std::fmax(std::fmax(v1.x, v2.x), v3.x);
+        float minX = std::fmin(std::fmin(v1.x, v2.x), v3.x);
+        float maxY = std::fmax(std::fmax(v1.y, v2.y), v3.y);
+        float minY = std::fmin(std::fmin(v1.y, v2.y), v3.y);
+        float maxZ = std::fmax(std::fmax(v1.z, v2.z), v3.z);
+        float minZ = std::fmin(std::fmin(v1.z, v2.z), v3.z);
+        mesh->right = std::fmax(maxX, mesh->right);
+        mesh->left = std::fmin(minX, mesh->left);
+        mesh->top = std::fmax(maxY, mesh->top);
+        mesh->bottom = std::fmin(minY, mesh->bottom);
+        mesh->front = std::fmax(maxZ, mesh->front);
+        mesh->back = std::fmin(minZ, mesh->back);
     }
 
     std::cout << "End of Loading" << "\n";
@@ -21,7 +36,7 @@ std::vector<Triangle*>* ObjDecoder::getTriangles(const std::string& file) {
     delete rawData.vertices;
     delete rawData.uvs;
     delete rawData.faceConfiguration;
-    return triangles;
+    return mesh;
 }
 
 RawData ObjDecoder::readFile(const std::string& filename) {

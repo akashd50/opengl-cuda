@@ -5,6 +5,7 @@
 #include "headers/CudaUtils.cuh"
 #include "headers/MainOpenGL.h"
 #include "headers/Quad.h"
+#include "headers/ObjDecoder.h"
 
 #define M_PI 3.14159265358979323846264338327950288
 
@@ -46,6 +47,11 @@ void MainOpenGL::init()
 
     scene->addObject(new Sphere(mat1, 1.0, glm::vec3(0.0, 0.0, -6.0)));
     scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
+
+    Mesh* mesh = ObjDecoder::createMesh("../resources/cube.obj");
+    mesh->setMaterial(mat1);
+    scene->addObject(mesh);
+
     cudaScene = allocateCudaScene(scene);
 
     cudaUtils = new CudaUtils();

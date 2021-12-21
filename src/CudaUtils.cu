@@ -282,13 +282,15 @@ CudaScene* allocateCudaScene(Scene* scene) {
     int index = 0;
     for (RTObject* obj : scene->getObjects()) {
         CudaRTObject* cudaPtr = rtObjectToCudaRTObject(obj);
-        objects[index++] = cudaPtr;
+        if (cudaPtr != nullptr) {
+            objects[index++] = cudaPtr;
+        }
     }
 
     CudaRTObject** cudaObjectsPtr;
-    check(cudaMalloc((void**)&cudaObjectsPtr, numObjects * sizeof(CudaRTObject*)));
-    check(cudaMemcpy(cudaObjectsPtr, objects, numObjects * sizeof(CudaRTObject*), cudaMemcpyHostToDevice));
-    CudaScene cudaScene(cudaObjectsPtr, numObjects);
+    check(cudaMalloc((void**)&cudaObjectsPtr, index * sizeof(CudaRTObject*)));
+    check(cudaMemcpy(cudaObjectsPtr, objects, index * sizeof(CudaRTObject*), cudaMemcpyHostToDevice));
+    CudaScene cudaScene(cudaObjectsPtr, index);
     CudaScene* cudaScenePtr;
     check(cudaMalloc((void**)&cudaScenePtr, sizeof(CudaScene)));
     check(cudaMemcpy(cudaScenePtr, &cudaScene, sizeof(CudaScene), cudaMemcpyHostToDevice));

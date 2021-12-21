@@ -18,6 +18,6 @@ struct RawData {
 
 class ObjDecoder {
 public:
-    static std::vector<Triangle*>* getTriangles(const std::string& file);
+    static Mesh* createMesh(const std::string& file);
     static RawData readFile(const std::string& filename);
 };
