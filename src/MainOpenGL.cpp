@@ -55,7 +55,7 @@ void MainOpenGL::init()
     mesh->setMaterial(mat3);
     scene->addObject(mesh);
 
-    cudaScene = allocateCudaScene(scene);
+    cudaScene = sceneToCudaScene(scene);
 
     cudaUtils = new CudaUtils();
     cudaUtils->deviceInformation();
