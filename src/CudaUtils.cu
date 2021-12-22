@@ -5,6 +5,7 @@
 #include <cuda.h>
 #include <cuda_gl_interop.h>
 #include <vector_functions.h>
+#include <math_functions.h>
 
 //----------OPERATORS---------------------------------------------------------------------------------------------------
 
@@ -50,9 +51,17 @@ __device__ float3 t_to_vec(float3 e, float3 d, float t) {
     return e + (t * d);
 }
 
+__device__ float magnitude(float3 a) {
+    return sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+}
+
 __device__ float3 normalize(float3 a) {
-    float mag = sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+    float mag = magnitude(a);
     return make_float3(a.x, a.y, a.z)/mag;
+}
+
+__device__ float3 cross(float3 a, float3 b) {
+    return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
 
 //----------RT-FUNCTIONS------------------------------------------------------------------------------------------------
@@ -84,6 +93,31 @@ __device__ float3 getSphereNormal(float3 point, CudaSphere* sphere) {
     return normalize(normal);
 }
 
+__device__ float checkHitOnPlane(float3 e, float3 d, float3 center, float3 normal) {
+    /*Checks the hit on an infinite plane for the given normal and returns t value*/
+    float denominator = dot(normal, d);
+    if (denominator != 0.0) {
+        float t = dot(normal, (center - e)) / denominator;
+        return t;
+    }
+    return MIN_T;
+}
+
+__device__ float checkHitOnTriangle(float3 e, float3 d, float3 a, float3 b, float3 c) {
+    /*Checks the hit on the triangle and returns t value. I first use the plane hit and then check if its inside the triangle*/
+    float3 normal = normalize(cross(b - a, c - a));
+    float t = checkHitOnPlane(e, d, a, normal);
+    float3 x = t_to_vec(e, d, t);
+    float aTest = dot(cross(b - a, x - a), normal);
+    float bTest = dot(cross(c - b, x - b), normal);
+    float cTest = dot(cross(a - c, x - c), normal);
+    if (t != MIN_T && ((aTest >= 0 - HIT_T_OFFSET && bTest >= 0 - HIT_T_OFFSET && cTest >= 0 - HIT_T_OFFSET)
+    || (aTest <= 0 + HIT_T_OFFSET && bTest <= 0 + HIT_T_OFFSET && cTest <= 0 + HIT_T_OFFSET))) {
+        return t;
+    }
+    return MIN_T;
+}
+
 __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, float radius) {
     float3 center_2_eye = eye - center;
     float ray_dot_ray = dot(ray, ray);
@@ -112,13 +146,28 @@ __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, floa
 __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene) {
     HitInfo hit;
     for (int i=0; i<scene->numObjects; i++) {
-        CudaSphere* sphere = (CudaSphere*)scene->objects[i];
-        float sphereHit = check_hit_on_sphere(eye, ray, sphere->position, sphere->radius);
-        if (sphereHit >= HIT_T_OFFSET && sphereHit < hit.t) {
-            hit.object = sphere;
-            hit.t = sphereHit;
-            hit.hitPoint = t_to_vec(eye, ray, sphereHit);
-            hit.index = i;
+        if (scene->objects[i]->type == SPHERE) {
+            CudaSphere* sphere = (CudaSphere*)scene->objects[i];
+            float sphereHit = check_hit_on_sphere(eye, ray, sphere->position, sphere->radius);
+            if (sphereHit >= HIT_T_OFFSET && sphereHit < hit.t) {
+                hit.object = sphere;
+                hit.t = sphereHit;
+                hit.hitPoint = t_to_vec(eye, ray, sphereHit);
+                hit.index = i;
+            }
+        }
+        else if (scene->objects[i]->type == MESH) {
+            CudaMesh* mesh = (CudaMesh*)scene->objects[i];
+            for (int j=0; j<mesh->numTriangles; j++) {
+                CudaTriangle t = mesh->triangles[j];
+                float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
+                if (triangleHit >= HIT_T_OFFSET && triangleHit < hit.t) {
+                    hit.object = mesh;
+                    hit.t = triangleHit;
+                    hit.hitPoint = t_to_vec(eye, ray, triangleHit);
+                    hit.index = i;
+                }
+            }
         }
     }
     return hit;
@@ -291,15 +340,19 @@ CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
             std::vector<CudaTriangle*> treeTriangles;
             for(int i=0; i<mesh->triangles->size(); i++) {
                 Triangle* t = mesh->triangles->at(i);
-                CudaTriangle cudaTriangle(vec3ToFloat3(t->a), vec3ToFloat3(t->b), vec3ToFloat3(t->c), i);
-                tempTriangles.push_back(cudaTriangle);
-                treeTriangles.push_back(&cudaTriangle);
+                CudaTriangle* cudaTriangle = new CudaTriangle(vec3ToFloat3(t->a), vec3ToFloat3(t->b), vec3ToFloat3(t->c), i);
+                tempTriangles.push_back(*cudaTriangle);
+                treeTriangles.push_back(cudaTriangle);
             }
             CudaTriangle* cudaTrianglePtr = cudaWrite<CudaTriangle>(tempTriangles.data(), tempTriangles.size());
             CudaMesh tempMesh(cudaTrianglePtr);
             tempMesh.numTriangles = tempTriangles.size();
             BVHBinaryNode root(mesh->bounds);
             tempMesh.bvhRoot = createTreeHelper(&treeTriangles, &root);
+            tempMesh.material = materialToCudaMaterial(object->getMaterial());
+            for (CudaTriangle* t: treeTriangles) {
+                delete t;
+            }
 
             return cudaWrite<CudaMesh>(&tempMesh, 1);
         }
@@ -317,8 +370,9 @@ CudaScene* allocateCudaScene(Scene* scene) {
             objects[index++] = cudaPtr;
         }
     }
-
     CudaRTObject** cudaObjectsPtr = cudaWrite<CudaRTObject *>(objects, index);
+    delete[] objects;
+
     CudaScene cudaScene(cudaObjectsPtr, index);
     return cudaWrite<CudaScene>(&cudaScene, 1);
 }
@@ -384,9 +438,9 @@ BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHB
 
 bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds) {
     float3 pos = triangle->getPosition();
-    return (pos.x > bounds->left && pos.x < bounds->right) &&
-           (pos.y > bounds->bottom && pos.y < bounds->top) &&
-           (pos.z > bounds->back && pos.z < bounds->front);
+    return (pos.x >= bounds->left && pos.x <= bounds->right) &&
+           (pos.y >= bounds->bottom && pos.y <= bounds->top) &&
+           (pos.z >= bounds->back && pos.z <= bounds->front);
 }
 
 //    std::vector<CudaTriangle*> trianglesInBounds(std::vector<CudaTriangle*>* localTriangles, Bounds* bounds) {

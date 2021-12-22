@@ -36,10 +36,10 @@ public:
 };
 
 
-const int SPHERE = 1;
-const int MESH = 2;
-const int TRIANGLE = 3;
-const int PLANE = 4;
+__device__ const int SPHERE = 1;
+__device__ const int MESH = 2;
+__device__ const int TRIANGLE = 3;
+__device__ const int PLANE = 4;
 
 class Material {
 public:
