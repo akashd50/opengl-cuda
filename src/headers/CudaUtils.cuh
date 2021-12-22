@@ -6,6 +6,36 @@
 #include <surface_indirect_functions.h>
 #include <cuda_runtime.h>
 
+class Bounds {
+public:
+    float top, bottom, left, right, front, back;
+    Bounds(float _t, float _b, float _l, float _r, float _f, float _back): top(_t), bottom(_b),
+    left(_l), right(_r), front(_f), back(_back) {}
+};
+
+class BVHNode {
+public:
+    BVHNode *top1, *top2, *top3, *top4, *bottom1, *bottom2, *bottom3, *bottom4;
+    int objectIndex;
+    BVHNode() {
+
+    }
+};
+
+class BVHBinaryNode {
+public:
+    BVHBinaryNode *left, *right;
+    Bounds* bounds;
+    int* objectsIndex;
+    BVHBinaryNode() {}
+    BVHBinaryNode(Bounds* _bounds): bounds(_bounds), left(nullptr), right(nullptr), objectsIndex(nullptr) {}
+    BVHBinaryNode(Bounds* _bounds, int* _objectsIndex): bounds(_bounds), objectsIndex(_objectsIndex),
+    left(nullptr), right(nullptr) {}
+    BVHBinaryNode(Bounds* _bounds, BVHBinaryNode* _left, BVHBinaryNode* _right): bounds(_bounds),
+    left(_left), right(_right), objectsIndex(nullptr) {}
+};
+
+
 const int SPHERE = 1;
 const int MESH = 2;
 const int TRIANGLE = 3;
@@ -65,10 +95,10 @@ public:
     }
 };
 
-class Triangle: public RTObject {
+class Triangle {
 public:
     glm::vec3 a, b, c;
-    Triangle(glm::vec3 _a, glm::vec3 _b, glm::vec3 _c): RTObject(TRIANGLE), a(_a), b(_b), c(_c) {}
+    Triangle(glm::vec3 _a, glm::vec3 _b, glm::vec3 _c): a(_a), b(_b), c(_c) {}
 };
 
 class Mesh: public RTObject {
@@ -183,16 +213,38 @@ public:
     inline CudaRTObject(int _type, CudaMaterial* _material) : type(_type), material(_material) {}
 };
 
-class CudaTriangle: public CudaRTObject {
+class CudaTriangle {
 public:
     float3 a, b, c;
-    CudaTriangle(float3 _a, float3 _b, float3 _c): CudaRTObject(TRIANGLE), a(_a), b(_b), c(_c) {}
+    int index;
+    //CudaTriangle(float3 _a, float3 _b, float3 _c): CudaRTObject(TRIANGLE), a(_a), b(_b), c(_c) {}
+    CudaTriangle(float3 _a, float3 _b, float3 _c): a(_a), b(_b), c(_c) {}
+
+    float3 getPosition() {
+        return make_float3((a.x + b.x + c.x)/3, (a.y + b.y + c.y)/3, (a.z + b.z + c.z)/3);
+    }
 };
+
+//template <class T>
+//T* cudaWrite(T* data, int len) {
+//    T* cudaPointer;
+//    cudaMalloc((void**)&cudaPointer, sizeof(T) * len);
+//    cudaMemcpy(cudaPointer, &data, sizeof(T) * len, cudaMemcpyHostToDevice);
+//    return cudaPointer;
+//}
 
 class CudaMesh: public CudaRTObject {
 public:
     CudaTriangle** triangles;
+    int numTriangles;
     CudaMesh(CudaTriangle** _triangles): CudaRTObject(MESH), triangles(_triangles) {}
+
+//    void createOctoTree(Bounds bounds) {
+//        float midHorizontal = (bounds.left + bounds.right)/2;
+//        float midVertical = (bounds.top + bounds.bottom)/2;
+//        float midFrontBack = (bounds.top + bounds.bottom)/2;
+//        BVHNode* root = new BVHNode();
+//    }
 };
 
 class CudaSphere: public CudaRTObject {
@@ -244,21 +296,20 @@ public:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+template <class T>
+T* cudaWrite(T* data, int len);
+
+template <class T>
+T* cudaRead(T* data, int len);
 
 float3 vec3ToFloat3(glm::vec3 vec);
 CudaMaterial* materialToCudaMaterial(Material* material);
 CudaRTObject* rtObjectToCudaRTObject(RTObject* object);
 CudaScene* allocateCudaScene(Scene* scene);
+
+bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds);
+BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node);
+
 void cleanCudaScene(CudaScene* scene);
 
 //----------------------------------------------------------------------------------------------------------------------
-
-class BVHNode {
-    BVHNode *left, *right;
-    int objectIndex;
-    BVHNode() {
-
-    }
-
-
-};

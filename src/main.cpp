@@ -1,6 +1,7 @@
 #pragma once
 #include <GL/glew.h>
 #include <GL/freeglut.h>
+#include <iostream>
 #include "headers/MainOpenGL.h"
 
 #define MAX_SOURCE_SIZE (0x100000)
@@ -32,5 +33,6 @@ int main(int argc, char** argv) {
 
     glutMainLoop();
 
+    std::cout << "End of main.." << std::endl;
     return 0;
 }

@@ -253,14 +253,29 @@ float3 vec3ToFloat3(glm::vec3 vec) {
     return make_float3(vec.x, vec.y, vec.z);
 }
 
+template <class T>
+T* cudaWrite(T* data, int len) {
+    T* cudaPointer;
+    check(cudaMalloc((void**)&cudaPointer, sizeof(T) * len));
+    check(cudaMemcpy(cudaPointer, data, sizeof(T) * len, cudaMemcpyHostToDevice));
+    return cudaPointer;
+}
+
+template <class T>
+T* cudaRead(T* src, int len) {
+//    CudaRTObject** objs = new CudaRTObject*[1];
+//    check(cudaMemcpy(objs, cudaObjectsPtr, sizeof(CudaRTObject*), cudaMemcpyDeviceToHost))
+
+    T* hostPointer = (T*)malloc(len * sizeof(T));
+    check(cudaMemcpy(hostPointer, src, len * sizeof(T), cudaMemcpyDeviceToHost))
+    return hostPointer;
+}
+
 CudaMaterial* materialToCudaMaterial(Material* material) {
     CudaMaterial newMaterial(vec3ToFloat3(material->ambient), vec3ToFloat3(material->diffuse), vec3ToFloat3(material->specular),
                              material->shininess, vec3ToFloat3(material->reflective), vec3ToFloat3(material->transmissive),
                              material->refraction, material->roughness);
-    CudaMaterial* cudaPtr;
-    check(cudaMalloc((void**)&cudaPtr, sizeof(CudaMaterial)));
-    check(cudaMemcpy(cudaPtr, &newMaterial, sizeof(CudaMaterial), cudaMemcpyHostToDevice));
-    return cudaPtr;
+    return cudaWrite<CudaMaterial>(&newMaterial, 1);
 }
 
 CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
@@ -268,10 +283,7 @@ CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
         case SPHERE:
             Sphere* sphere = (Sphere*)object;
             CudaSphere newSphere(vec3ToFloat3(sphere->getPosition()), sphere->getRadius(), materialToCudaMaterial(object->getMaterial()));
-            CudaSphere* cudaPointer;
-            check(cudaMalloc((void**)&cudaPointer, sizeof(CudaSphere)));
-            check(cudaMemcpy(cudaPointer, &newSphere, sizeof(CudaSphere), cudaMemcpyHostToDevice));
-            return cudaPointer;
+            return cudaWrite<CudaSphere>(&newSphere, 1);
     }
     return nullptr;
 }
@@ -287,22 +299,129 @@ CudaScene* allocateCudaScene(Scene* scene) {
         }
     }
 
-    CudaRTObject** cudaObjectsPtr;
-    check(cudaMalloc((void**)&cudaObjectsPtr, index * sizeof(CudaRTObject*)));
-    check(cudaMemcpy(cudaObjectsPtr, objects, index * sizeof(CudaRTObject*), cudaMemcpyHostToDevice));
+    CudaRTObject** cudaObjectsPtr = cudaWrite<CudaRTObject *>(objects, index);
     CudaScene cudaScene(cudaObjectsPtr, index);
-    CudaScene* cudaScenePtr;
-    check(cudaMalloc((void**)&cudaScenePtr, sizeof(CudaScene)));
-    check(cudaMemcpy(cudaScenePtr, &cudaScene, sizeof(CudaScene), cudaMemcpyHostToDevice));
-
-//    CudaRTObject** objs = new CudaRTObject*[1];
-//    check(cudaMemcpy(objs, cudaObjectsPtr, sizeof(CudaRTObject*), cudaMemcpyDeviceToHost))
-//
-//    CudaSphere* sphere = (CudaSphere*)malloc(sizeof(CudaSphere));
-//    check(cudaMemcpy(sphere, objs[0], sizeof(CudaSphere), cudaMemcpyDeviceToHost))
-    //cudaMemR
-    return cudaScenePtr;
+    return cudaWrite<CudaScene>(&cudaScene, 1);
 }
+
+BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node) {
+    int len = localTriangles->size();
+    if (len <= 5) {
+        int* indices = new int[len];
+        for (int i=0; i<len; i++) {
+            indices[i] = localTriangles->at(i)->index;
+        }
+        node->objectsIndex = indices;
+
+        BVHBinaryNode tempNode(cudaWrite<Bounds>(node->bounds, 1), cudaWrite<int>(indices, len));
+        return cudaWrite<BVHBinaryNode>(&tempNode, 1);
+    }
+
+    auto leftTriangles = new std::vector<CudaTriangle*>();
+    auto rightTriangles = new std::vector<CudaTriangle*>();
+
+    //bool xDiv, yDiv, zDiv;
+    auto nb = *node->bounds;
+    float xLen = nb.right - nb.left;
+    float yLen = nb.top - nb.bottom;
+    float zLen = nb.right - nb.left;
+    if (xLen > yLen && xLen > zLen) {
+        //xDiv = true;
+        float mid = (nb.left + nb.right)/2;
+        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, mid, nb.front, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, mid, nb.right, nb.front, nb.back));
+    }
+    else if (yLen > xLen && yLen > zLen) {
+        //yDiv = true;
+        float mid = (nb.top + nb.bottom)/2;
+        node->left = new BVHBinaryNode(new Bounds(mid, nb.bottom, nb.left, nb.right, nb.front, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, mid, nb.left, nb.right, nb.front, nb.back));
+    }
+    else if (zLen > yLen && zLen > xLen) {
+        //zDiv = true;
+        float mid = (nb.front + nb.back)/2;
+        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, mid, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, nb.front, mid));
+    }
+
+    for (CudaTriangle* t : *localTriangles) {
+        //divide along the axis with max length
+        if (isTriangleInBounds(t, node->left->bounds)) {
+            leftTriangles->push_back(t);
+        }
+        else if (isTriangleInBounds(t, node->right->bounds)) {
+            rightTriangles->push_back(t);
+        }
+    }
+
+    BVHBinaryNode* leftNode = createTreeHelper(leftTriangles, node->left);
+    delete leftTriangles;
+    BVHBinaryNode* rightNode = createTreeHelper(rightTriangles, node->right);
+    delete rightTriangles;
+
+    BVHBinaryNode tempNode(cudaWrite<Bounds>(node->bounds, 1), leftNode, rightNode);
+    return cudaWrite<BVHBinaryNode>(&tempNode, 1);
+}
+
+bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds) {
+    float3 pos = triangle->getPosition();
+    return (pos.x > bounds->left && pos.x < bounds->right) &&
+           (pos.y > bounds->bottom && pos.y < bounds->top) &&
+           (pos.z > bounds->back && pos.z < bounds->front);
+}
+
+//    std::vector<CudaTriangle*> trianglesInBounds(std::vector<CudaTriangle*>* localTriangles, Bounds* bounds) {
+//        auto leftTriangles = new std::vector<CudaTriangle*>();
+//        for (CudaTriangle* t : *localTriangles) {
+//
+//        }
+//    }
+
+//    void createTreeHelper(CudaTriangle** localTriangles, int num, float3 position) {
+//        for (int i=0; i<num; i++) {
+//            CudaTriangle* t = localTriangles[i];
+//            float3 position = t->getPosition();
+//            if (position.y >= position.y) {
+//                // If in the top half
+//                if (position.x >= position.x) {
+//                    // If in the top right half
+//                    if (position.z >= position.z) {
+//                        // If in the top right front
+//                    } else {
+//                        // If in the top right back
+//                    }
+//                } else {
+//                    // If in the top left half
+//                    if (position.z >= position.z) {
+//                        // If in the top left front
+//
+//                    } else {
+//                        // If in the top left back
+//
+//                    }
+//                }
+//            } else {
+//                // If in the bottom half
+//                if (position.x >= position.x) {
+//                    // If in the bottom right half
+//                    if (position.z >= position.z) {
+//                        // If in the bottom right front
+//                    } else {
+//                        // If in the bottom right back
+//                    }
+//                } else {
+//                    // If in the bottom left half
+//                    if (position.z >= position.z) {
+//                        // If in the bottom left front
+//
+//                    } else {
+//                        // If in the bottom left back
+//
+//                    }
+//                }
+//            }
+//        }
+//    }
 
 void cleanCudaScene(CudaScene* scene) {
     for (int i=0; i<scene->numObjects; i++) {
