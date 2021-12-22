@@ -27,12 +27,13 @@ public:
     BVHBinaryNode *left, *right;
     Bounds* bounds;
     int* objectsIndex;
-    BVHBinaryNode() {}
-    BVHBinaryNode(Bounds* _bounds): bounds(_bounds), left(nullptr), right(nullptr), objectsIndex(nullptr) {}
-    BVHBinaryNode(Bounds* _bounds, int* _objectsIndex): bounds(_bounds), objectsIndex(_objectsIndex),
-    left(nullptr), right(nullptr) {}
+    int numObjects;
+    BVHBinaryNode(): numObjects(0) {}
+    BVHBinaryNode(Bounds* _bounds): bounds(_bounds), left(nullptr), right(nullptr), objectsIndex(nullptr), numObjects(0) {}
+    BVHBinaryNode(Bounds* _bounds, int* _objectsIndex, int _numObject): bounds(_bounds), objectsIndex(_objectsIndex),
+    left(nullptr), right(nullptr), numObjects(_numObject) {}
     BVHBinaryNode(Bounds* _bounds, BVHBinaryNode* _left, BVHBinaryNode* _right): bounds(_bounds),
-    left(_left), right(_right), objectsIndex(nullptr) {}
+    left(_left), right(_right), objectsIndex(nullptr), numObjects(0) {}
 };
 
 
