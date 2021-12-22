@@ -104,9 +104,11 @@ public:
 class Mesh: public RTObject {
 public:
     std::vector<Triangle*>* triangles;
-    float top, bottom, left, right, front, back;
+    //float top, bottom, left, right, front, back;
+    Bounds* bounds;
     Mesh(): RTObject(MESH) {
-        top = 0; bottom = 0; left = 0; right = 0; front = 0; back = 0;
+        //top = 0; bottom = 0; left = 0; right = 0; front = 0; back = 0;
+        bounds = new Bounds(0, 0, 0, 0, 0, 0);
         triangles = new std::vector<Triangle*>();
     }
 
@@ -219,6 +221,7 @@ public:
     int index;
     //CudaTriangle(float3 _a, float3 _b, float3 _c): CudaRTObject(TRIANGLE), a(_a), b(_b), c(_c) {}
     CudaTriangle(float3 _a, float3 _b, float3 _c): a(_a), b(_b), c(_c) {}
+    CudaTriangle(float3 _a, float3 _b, float3 _c, int _index): a(_a), b(_b), c(_c), index(_index) {}
 
     float3 getPosition() {
         return make_float3((a.x + b.x + c.x)/3, (a.y + b.y + c.y)/3, (a.z + b.z + c.z)/3);
@@ -235,9 +238,10 @@ public:
 
 class CudaMesh: public CudaRTObject {
 public:
-    CudaTriangle** triangles;
+    CudaTriangle* triangles;
     int numTriangles;
-    CudaMesh(CudaTriangle** _triangles): CudaRTObject(MESH), triangles(_triangles) {}
+    BVHBinaryNode* bvhRoot;
+    CudaMesh(CudaTriangle* _triangles): CudaRTObject(MESH), triangles(_triangles) {}
 
 //    void createOctoTree(Bounds bounds) {
 //        float midHorizontal = (bounds.left + bounds.right)/2;

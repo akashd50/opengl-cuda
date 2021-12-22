@@ -23,12 +23,12 @@ Mesh* ObjDecoder::createMesh(const std::string& file) {
         float minY = std::fmin(std::fmin(v1.y, v2.y), v3.y);
         float maxZ = std::fmax(std::fmax(v1.z, v2.z), v3.z);
         float minZ = std::fmin(std::fmin(v1.z, v2.z), v3.z);
-        mesh->right = std::fmax(maxX, mesh->right);
-        mesh->left = std::fmin(minX, mesh->left);
-        mesh->top = std::fmax(maxY, mesh->top);
-        mesh->bottom = std::fmin(minY, mesh->bottom);
-        mesh->front = std::fmax(maxZ, mesh->front);
-        mesh->back = std::fmin(minZ, mesh->back);
+        mesh->bounds->right = std::fmax(maxX, mesh->bounds->right);
+        mesh->bounds->left = std::fmin(minX, mesh->bounds->left);
+        mesh->bounds->top = std::fmax(maxY, mesh->bounds->top);
+        mesh->bounds->bottom = std::fmin(minY, mesh->bounds->bottom);
+        mesh->bounds->front = std::fmax(maxZ, mesh->bounds->front);
+        mesh->bounds->back = std::fmin(minZ, mesh->bounds->back);
     }
 
     std::cout << "End of Loading" << "\n";

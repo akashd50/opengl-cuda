@@ -280,10 +280,29 @@ CudaMaterial* materialToCudaMaterial(Material* material) {
 
 CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
     switch (object->getType()) {
-        case SPHERE:
+        case SPHERE: {
             Sphere* sphere = (Sphere*)object;
             CudaSphere newSphere(vec3ToFloat3(sphere->getPosition()), sphere->getRadius(), materialToCudaMaterial(object->getMaterial()));
             return cudaWrite<CudaSphere>(&newSphere, 1);
+        }
+        case MESH: {
+            Mesh* mesh = (Mesh*)object;
+            std::vector<CudaTriangle> tempTriangles;
+            std::vector<CudaTriangle*> treeTriangles;
+            for(int i=0; i<mesh->triangles->size(); i++) {
+                Triangle* t = mesh->triangles->at(i);
+                CudaTriangle cudaTriangle(vec3ToFloat3(t->a), vec3ToFloat3(t->b), vec3ToFloat3(t->c), i);
+                tempTriangles.push_back(cudaTriangle);
+                treeTriangles.push_back(&cudaTriangle);
+            }
+            CudaTriangle* cudaTrianglePtr = cudaWrite<CudaTriangle>(tempTriangles.data(), tempTriangles.size());
+            CudaMesh tempMesh(cudaTrianglePtr);
+            tempMesh.numTriangles = tempTriangles.size();
+            BVHBinaryNode root(mesh->bounds);
+            tempMesh.bvhRoot = createTreeHelper(&treeTriangles, &root);
+
+            return cudaWrite<CudaMesh>(&tempMesh, 1);
+        }
     }
     return nullptr;
 }
@@ -325,19 +344,19 @@ BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHB
     float xLen = nb.right - nb.left;
     float yLen = nb.top - nb.bottom;
     float zLen = nb.right - nb.left;
-    if (xLen > yLen && xLen > zLen) {
+    if (xLen >= yLen && xLen >= zLen) {
         //xDiv = true;
         float mid = (nb.left + nb.right)/2;
         node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, mid, nb.front, nb.back));
         node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, mid, nb.right, nb.front, nb.back));
     }
-    else if (yLen > xLen && yLen > zLen) {
+    else if (yLen >= xLen && yLen >= zLen) {
         //yDiv = true;
         float mid = (nb.top + nb.bottom)/2;
         node->left = new BVHBinaryNode(new Bounds(mid, nb.bottom, nb.left, nb.right, nb.front, nb.back));
         node->right = new BVHBinaryNode(new Bounds(nb.top, mid, nb.left, nb.right, nb.front, nb.back));
     }
-    else if (zLen > yLen && zLen > xLen) {
+    else if (zLen >= yLen && zLen >= xLen) {
         //zDiv = true;
         float mid = (nb.front + nb.back)/2;
         node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, mid, nb.back));
