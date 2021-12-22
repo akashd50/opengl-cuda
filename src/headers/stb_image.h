@@ -66,7 +66,7 @@ RECENT REVISION HISTORY:
       2.12  (2016-04-02) fix typo in 2.11 PSD fix that caused crashes
       2.11  (2016-04-02) 16-bit PNGS; enable SSE2 in non-gcc x64
                          RGB-format JPEG; remove white matting in PSD;
-                         cudaWrite large structures on the stack;
+                         allocate large structures on the stack;
                          correct channel count for PNG & BMP
       2.10  (2016-01-22) avoid warning introduced in 2.09
       2.09  (2016-01-16) 16-bit TGA; comments in PNM files; STBI_REALLOC_SIZED
@@ -359,7 +359,7 @@ RECENT REVISION HISTORY:
 //    than that size (in either width or height) without further processing.
 //    This is to let programs in the wild set an upper bound to prevent
 //    denial-of-service attacks on untrusted data, as one could generate a
-//    valid image of gigantic dimensions and force stb_image to cudaWrite a
+//    valid image of gigantic dimensions and force stb_image to allocate a
 //    huge block of memory and spend disproportionate time decoding it. By
 //    default this is set to (1 << 24), which is 16777216, but that's still
 //    very big.
@@ -3307,7 +3307,7 @@ static int stbi__process_frame_header(stbi__jpeg* z, int scan)
         // number of effective pixels (e.g. for non-interleaved MCU)
         z->img_comp[i].x = (s->img_x * z->img_comp[i].h + h_max - 1) / h_max;
         z->img_comp[i].y = (s->img_y * z->img_comp[i].v + v_max - 1) / v_max;
-        // to simplify generation, we'll cudaWrite enough memory to decode
+        // to simplify generation, we'll allocate enough memory to decode
         // the bogus oversized data from using interleaved MCUs and their
         // big blocks (e.g. a 16x16 iMCU on an image of width 33); we won't
         // discard the extra data until colorspace conversion
@@ -3867,7 +3867,7 @@ static stbi_uc* load_jpeg_image(stbi__jpeg* z, int* out_x, int* out_y, int* comp
         for (k = 0; k < decode_n; ++k) {
             stbi__resample* r = &res_comp[k];
 
-            // cudaWrite line buffer big enough for upsampling off the edges
+            // allocate line buffer big enough for upsampling off the edges
             // with upsample factor of 4
             z->img_comp[k].linebuf = (stbi_uc*)stbi__malloc(z->s->img_x + 3);
             if (!z->img_comp[k].linebuf) { stbi__cleanup_jpeg(z); return stbi__errpuc("outofmem", "Out of memory"); }
@@ -4772,7 +4772,7 @@ static int stbi__create_png_image_raw(stbi__png* a, stbi_uc* raw, stbi__uint32 r
             stbi_uc scale = (color == 0) ? stbi__depth_scale_table[depth] : 1; // scale grayscale values to 0..255 range
 
             // note that the final byte might overshoot and write more data than desired.
-            // we can cudaWrite enough data that this never writes out of memory, but it
+            // we can allocate enough data that this never writes out of memory, but it
             // could also overwrite the next scanline. can it overwrite non-empty data
             // on the next scanline? yes, consider 1-pixel-wide scanlines with 1-bit-per-pixel.
             // so we need to explicitly clamp the final ones
@@ -7803,7 +7803,7 @@ STBIDEF int stbi_is_16_bit_from_callbacks(stbi_io_callbacks const* c, void* user
       2.14  (2017-03-03) remove deprecated STBI_JPEG_OLD; fixes for Imagenet JPGs
       2.13  (2016-11-29) add 16-bit API, only supported for PNG right now
       2.12  (2016-04-02) fix typo in 2.11 PSD fix that caused crashes
-      2.11  (2016-04-02) cudaWrite large structures on the stack
+      2.11  (2016-04-02) allocate large structures on the stack
                          remove white matting for transparent PSD
                          fix reported channel count for PNG & BMP
                          re-enable SSE2 in non-gcc 64-bit
