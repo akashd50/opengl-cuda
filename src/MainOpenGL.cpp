@@ -44,12 +44,15 @@ void MainOpenGL::init()
     auto mat2 = new Material(glm::vec3(0.1), glm::vec3(0.6, 0.2, 0.1),
                              glm::vec3(1.0), 1.0, glm::vec3(0.3),
                              glm::vec3(0.2), 1.0);
+    auto mat3 = new Material(glm::vec3(0.1), glm::vec3(0.1, 0.2, 0.6),
+                             glm::vec3(1.0), 1.0, glm::vec3(0.3),
+                             glm::vec3(0.2), 1.0);
 
     scene->addObject(new Sphere(mat1, 2.0, glm::vec3(2.0, 0.0, -7.0)));
     scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
 
     Mesh* mesh = ObjDecoder::createMesh("../resources/cube.obj");
-    mesh->setMaterial(mat2);
+    mesh->setMaterial(mat3);
     scene->addObject(mesh);
 
     cudaScene = allocateCudaScene(scene);

@@ -9,6 +9,7 @@
 class Bounds {
 public:
     float top, bottom, left, right, front, back;
+    Bounds(): top(-9999), bottom(9999), left(9999), right(-9999), front(-9999), back(9999) {}
     Bounds(float _t, float _b, float _l, float _r, float _f, float _back): top(_t), bottom(_b),
     left(_l), right(_r), front(_f), back(_back) {}
 };
@@ -109,7 +110,7 @@ public:
     Bounds* bounds;
     Mesh(): RTObject(MESH) {
         //top = 0; bottom = 0; left = 0; right = 0; front = 0; back = 0;
-        bounds = new Bounds(0, 0, 0, 0, 0, 0);
+        bounds = new Bounds(-9999, 9999, 9999, -9999, -9999, 9999);
         triangles = new std::vector<Triangle*>();
     }
 
@@ -308,13 +309,17 @@ template <class T>
 T* cudaRead(T* data, int len);
 
 float3 vec3ToFloat3(glm::vec3 vec);
-CudaMaterial* materialToCudaMaterial(Material* material);
-CudaRTObject* rtObjectToCudaRTObject(RTObject* object);
-CudaScene* allocateCudaScene(Scene* scene);
-
+Bounds* getNewBounds(std::vector<CudaTriangle*>* triangles);
+bool isFloat3InBounds(float3 point, Bounds* bounds);
 bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds);
 BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node);
 
+CudaMaterial* materialToCudaMaterial(Material* material);
+CudaRTObject* rtObjectToCudaRTObject(RTObject* object);
+CudaScene* allocateCudaScene(Scene* scene);
+CudaMaterial* materialToCudaMaterialOnHost(Material* material);
+CudaRTObject* rtObjectToCudaRTObjectOnHost(RTObject* object);
+CudaScene* allocateCudaSceneOnHost(Scene* scene);
 void cleanCudaScene(CudaScene* scene);
 
 //----------------------------------------------------------------------------------------------------------------------

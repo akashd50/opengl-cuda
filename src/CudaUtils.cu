@@ -104,7 +104,7 @@ __device__ float checkHitOnPlane(float3 e, float3 d, float3 center, float3 norma
         float t = dot(normal, (center - e)) / denominator;
         return t;
     }
-    return MIN_T;
+    return MAX_T;
 }
 
 __device__ float checkHitOnTriangle(float3 e, float3 d, float3 a, float3 b, float3 c) {
@@ -115,13 +115,17 @@ __device__ float checkHitOnTriangle(float3 e, float3 d, float3 a, float3 b, floa
     float aTest = dot(cross(b - a, x - a), normal);
     float bTest = dot(cross(c - b, x - b), normal);
     float cTest = dot(cross(a - c, x - c), normal);
-    if (t != MIN_T && ((aTest >= 0 - HIT_T_OFFSET && bTest >= 0 - HIT_T_OFFSET && cTest >= 0 - HIT_T_OFFSET)
+    if (t != MAX_T && ((aTest >= 0 - HIT_T_OFFSET && bTest >= 0 - HIT_T_OFFSET && cTest >= 0 - HIT_T_OFFSET)
     || (aTest <= 0 + HIT_T_OFFSET && bTest <= 0 + HIT_T_OFFSET && cTest <= 0 + HIT_T_OFFSET))) {
         return t;
     }
-    return MIN_T;
+    return MAX_T;
 }
 
+__device__ void printBounds(Bounds* bounds) {
+    printf("AABB (%0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f)", bounds->top, bounds->bottom,
+           bounds->left, bounds->right, bounds->front, bounds->back);
+}
 
 __device__ void print2DUtil(BVHBinaryNode *root, int space)
 {
@@ -141,7 +145,11 @@ __device__ void print2DUtil(BVHBinaryNode *root, int space)
     for (int i = 10; i < space; i++)
         printf(" ");
     //print data
-    printf("[");
+    printf("[{");
+    //if (root->numObjects == 0) {
+    printBounds(root->bounds);
+    //}
+    printf("} ");
     for (int i=0; i<root->numObjects; i++) {
         printf("%d, ", root->objectsIndex[i]);
     }
@@ -190,7 +198,7 @@ __device__ __host__ void swap(float &a, float &b) {
         tmax = tzmax;
  */
 
-__device__ __host__ float checkHitOnAABB(float3 e, float3 d, Bounds* bounds) {
+__device__ __host__ float checkHitOnAABB(float3 e, float3 d, Bounds* bounds, bool debug) {
     float tmin = (bounds->left - e.x) / d.x;
     float tmax = (bounds->right - e.x) / d.x;
 
@@ -224,88 +232,74 @@ __device__ __host__ float checkHitOnAABB(float3 e, float3 d, Bounds* bounds) {
     if (tzmax < tmax)
         tmax = tzmax;
 
-//    printf("Tmin %f, Tmax %f\n", tmin, tmax);
-//    float3 nn = t_to_vec(e, d, tmin);
-//    float3 ff = t_to_vec(e, d, tmax);
-//    printf("Near (%f, %f, %f), Far (%f, %f, %f)\n", nn.x, nn.y, nn.z, ff.x, ff.y, ff.z);
     return tmin;
-    //return MIN_T;
 }
 
 __device__ float checkHitOnMeshHelper(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
+    float minT = MAX_T;
     if (node->numObjects != 0) { // Is a leaf node
-        float minT = MAX_T;
         for (int j=0; j<node->numObjects; j++) {
             CudaTriangle t = mesh->triangles[node->objectsIndex[j]];
             float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
-            if (triangleHit >= HIT_T_OFFSET && triangleHit < minT) {
+            if(debug) {
+                printf("Checking hits on triangle (%d) -- (%f)\n", node->objectsIndex[j], triangleHit);
+            }
+            if (triangleHit < minT) {
                 minT = triangleHit;
                 if (debug) {
                     printf("New hit on triangle at (%d) MinT (%f)\n", node->objectsIndex[j], minT);
                 }
             }
         }
-        if(debug) {
-            printf("Returning T (%f)\n", minT);
-        }
+    }
+
+    if (node->left == nullptr || node->right == nullptr) {
         return minT;
     }
 
-    float leftT = checkHitOnAABB(eye, ray, node->left->bounds);
-    float rightT = checkHitOnAABB(eye, ray, node->right->bounds);
+    float leftT = checkHitOnAABB(eye, ray, node->left->bounds, debug);
+    float rightT = checkHitOnAABB(eye, ray, node->right->bounds, debug);
 
-    if (leftT == MAX_T && rightT == MAX_T) return MAX_T;
-    float t = MAX_T;
-    if (leftT != MAX_T) {
-        t = checkHitOnMeshHelper(eye, ray, node->left, mesh, debug);
-    }
-    if (rightT != MAX_T) {
-        float tempT = checkHitOnMeshHelper(eye, ray, node->right, mesh, debug);
-        t = min(tempT, t);
-    }
-
-//    BVHBinaryNode* checkFirst = leftT <= rightT ? node->left : node->right;
-//    BVHBinaryNode* checkLater = leftT <= rightT ? node->right : node->left;
-//    bool shouldCheckLater = leftT <= rightT ? rightT != MAX_T : leftT != MAX_T;
 //    if (debug) {
-//        printf("Checking %s first - check later(%d)\n", leftT <= rightT ? "left" : "right", shouldCheckLater);
+//        printf("LeftT - AABB (%f, %f, %f, %f, %f, %f) ---- (%f)\n", node->left->bounds->top, node->left->bounds->bottom,
+//               node->left->bounds->left, node->left->bounds->right, node->left->bounds->front, node->left->bounds->back, leftT);
+//
+//        printf("RightT - AABB (%f, %f, %f, %f, %f, %f) ---- (%f)\n", node->right->bounds->top, node->right->bounds->bottom,
+//               node->right->bounds->left, node->right->bounds->right, node->right->bounds->front, node->right->bounds->back, rightT);
 //    }
-//    float t = checkHitOnMeshHelper(eye, ray, checkFirst, mesh, debug);
-//    if (t == MAX_T && shouldCheckLater) {
-//        t = checkHitOnMeshHelper(eye, ray, checkLater, mesh, debug);
-//    }
-    return t;
+
+    if (leftT != MAX_T && leftT <= minT) {
+        if (debug) {
+            printf("Checking left LeftT(%f) MinT(%f)\n", leftT, minT);
+        }
+        float tempT = checkHitOnMeshHelper(eye, ray, node->left, mesh, debug);
+        minT = min(tempT, minT);
+    }
+    if (rightT != MAX_T && rightT <= minT) {
+        if (debug) {
+            printf("Checking right RightT(%f) MinT(%f)\n", rightT, minT);
+        }
+        float tempT = checkHitOnMeshHelper(eye, ray, node->right, mesh, debug);
+        minT = min(tempT, minT);
+    }
+
+    if (debug) {
+        printf("Returning MinT(%f)\n", minT);
+    }
+    return minT;
 }
 
 __device__ float checkHitOnMesh(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
-    /*if (node->numObjects != 0) { // Is a root node
-        float minT = MAX_T;
-        for (int j=0; j<node->numObjects; j++) {
-            CudaTriangle t = mesh->triangles[node->objectsIndex[j]];
-            float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
-            if (triangleHit >= HIT_T_OFFSET && triangleHit < minT) {
-                minT = triangleHit;
-            }
-        }
-        return minT;
-    }
-
-    if (checkHitOnAABB(eye, ray, node->bounds) != MAX_T) { // If node is hit
-        float t = checkHitOnMesh(eye, ray, node->left, mesh);
-        if (t == MAX_T) {
-            t = checkHitOnMesh(eye, ray, node->right, mesh);
-        }
-    } else {
-        return MAX_T;
-    }*/
-
+    float t = checkHitOnAABB(eye, ray, node->bounds, debug);
     if (debug) {
-        printf("\n\n");
-        print2DUtil(node, 0);
-        printf("\n\n");
+//        printf("\n\n");
+//        print2DUtil(node, 0);
+//        printf("\n\n");
+
+        printf("Main AABB Hit @ (%f)\n", t);
     }
 
-    if (checkHitOnAABB(eye, ray, node->bounds) != MAX_T) { // If node is hit
+    if (t != MAX_T) { // If node is hit
         return checkHitOnMeshHelper(eye, ray, node, mesh, debug);
     } else {
         return MAX_T;
@@ -348,6 +342,10 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
                 hit.t = sphereHit;
                 hit.hitPoint = t_to_vec(eye, ray, sphereHit);
                 hit.index = i;
+
+                if (debug) {
+                    printf("doHitTest @ index (%d) with t (%f)\n", i, sphereHit);
+                }
             }
         }
         else if (scene->objects[i]->type == MESH) {
@@ -358,6 +356,9 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
                 hit.t = meshHit;
                 hit.hitPoint = t_to_vec(eye, ray, meshHit);
                 hit.index = i;
+                if (debug) {
+                    printf("doHitTest @ index (%d) with t (%f)\n", i, meshHit);
+                }
             }
 //            for (int j=0; j<mesh->numTriangles; j++) {
 //                CudaTriangle t = mesh->triangles[j];
@@ -384,13 +385,13 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int b
     HitInfo hitInfo = doHitTest(eye, ray, scene, debug);
     if (hitInfo.isHit()) {
         float3 reflectedRay = normalize(getReflectedRay(eye, ray, getSphereNormal(hitInfo.hitPoint, (CudaSphere*)hitInfo.object)));
-
         if (debug) {
             printf("HitInfo(%d); Hit T(%f) @ (%f, %f, %f) - Reflected(%f, %f, %f)\n", hitInfo.index, hitInfo.t, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
                    reflectedRay.x, reflectedRay.y, reflectedRay.z);
         }
         float3 reflectedRayColor = hitInfo.object->material->reflective * traceSingleRay(hitInfo.hitPoint, reflectedRay, scene, bounceIndex + 1, debug);
         color = hitInfo.object->material->diffuse + reflectedRayColor;
+
     } else {
         color = make_float3(0, 0, 0);
     }
@@ -409,15 +410,17 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
     float3 ray = cast_ray(x, y, 512, 512) - eye;
     uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, false));
 
-    surf2Dwrite(color, image, x * sizeof(color), y, cudaBoundaryModeClamp);
+    surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
 }
 
-__global__ void kernel_traceSingleRay(int x, int y, CudaScene* scene)
+__global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, CudaScene* scene)
 {
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
     printf("Ray (%f, %f, %f)\n", ray.x, ray.y, ray.z);
-    traceSingleRay(eye, ray, scene, 0, true);
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, true));
+    printf("Final Color: (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
+    surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -467,7 +470,7 @@ void CudaUtils::renderScene(CudaScene* cudaScene) {
 }
 
 void CudaUtils::onClick(int x, int y, CudaScene* cudaScene) {
-    kernel_traceSingleRay<<<1, 1>>>(x, y, cudaScene);
+    kernel_traceSingleRay<<<1, 1>>>(CudaUtils::viewCudaSurfaceObject, x, y, cudaScene);
 }
 
 void CudaUtils::deviceInformation() {
@@ -523,6 +526,108 @@ T* cudaRead(T* src, int len) {
     T* hostPointer = (T*)malloc(len * sizeof(T));
     check(cudaMemcpy(hostPointer, src, len * sizeof(T), cudaMemcpyDeviceToHost))
     return hostPointer;
+}
+
+Bounds* getNewBounds(std::vector<CudaTriangle*>* triangles) {
+    auto b = new Bounds();
+    for(CudaTriangle* t: *triangles) {
+        float maxX = std::fmax(std::fmax(t->a.x, t->b.x), t->c.x);
+        float minX = std::fmin(std::fmin(t->a.x, t->b.x), t->c.x);
+        float maxY = std::fmax(std::fmax(t->a.y, t->b.y), t->c.y);
+        float minY = std::fmin(std::fmin(t->a.y, t->b.y), t->c.y);
+        float maxZ = std::fmax(std::fmax(t->a.z, t->b.z), t->c.z);
+        float minZ = std::fmin(std::fmin(t->a.z, t->b.z), t->c.z);
+        b->right = std::fmax(maxX, b->right);
+        b->left = std::fmin(minX, b->left);
+        b->top = std::fmax(maxY, b->top);
+        b->bottom = std::fmin(minY, b->bottom);
+        b->front = std::fmax(maxZ, b->front);
+        b->back = std::fmin(minZ, b->back);
+    }
+    return b;
+}
+
+bool isFloat3InBounds(float3 point, Bounds* bounds) {
+    return (point.x >= bounds->left && point.x <= bounds->right) &&
+           (point.y >= bounds->bottom && point.y <= bounds->top) &&
+           (point.z >= bounds->back && point.z <= bounds->front);
+}
+
+bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds) {
+//    float3 pos = triangle->getPosition();
+//    return (pos.x >= bounds->left && pos.x <= bounds->right) &&
+//           (pos.y >= bounds->bottom && pos.y <= bounds->top) &&
+//           (pos.z >= bounds->back && pos.z <= bounds->front);
+    return isFloat3InBounds(triangle->a, bounds)
+    && isFloat3InBounds(triangle->b, bounds)
+    && isFloat3InBounds(triangle->c, bounds);
+}
+
+BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node) {
+    int len = localTriangles->size();
+    if (len <= 5) {
+        int* indices = new int[len];
+        for (int i=0; i<len; i++) {
+            indices[i] = localTriangles->at(i)->index;
+        }
+        node->objectsIndex = indices;
+
+        BVHBinaryNode tempNode(cudaWrite<Bounds>(node->bounds, 1), cudaWrite<int>(indices, len), len);
+        return cudaWrite<BVHBinaryNode>(&tempNode, 1);
+    }
+
+    auto leftTriangles = new std::vector<CudaTriangle*>();
+    auto rightTriangles = new std::vector<CudaTriangle*>();
+
+    //bool xDiv, yDiv, zDiv;
+    auto nb = *node->bounds;
+    float xLen = nb.right - nb.left;
+    float yLen = nb.top - nb.bottom;
+    float zLen = nb.right - nb.left;
+    if (xLen >= yLen && xLen >= zLen) {
+        //xDiv = true;
+        float mid = (nb.left + nb.right)/2;
+        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, mid, nb.front, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, mid, nb.right, nb.front, nb.back));
+    }
+    else if (yLen >= xLen && yLen >= zLen) {
+        //yDiv = true;
+        float mid = (nb.top + nb.bottom)/2;
+        node->left = new BVHBinaryNode(new Bounds(mid, nb.bottom, nb.left, nb.right, nb.front, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, mid, nb.left, nb.right, nb.front, nb.back));
+    }
+    else if (zLen >= yLen && zLen >= xLen) {
+        //zDiv = true;
+        float mid = (nb.front + nb.back)/2;
+        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, mid, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, nb.front, mid));
+    }
+
+    std::vector<int> currNodeIndices;
+    for (CudaTriangle* t : *localTriangles) {
+        //divide along the axis with max length
+        if (isTriangleInBounds(t, node->left->bounds)) {
+            leftTriangles->push_back(t);
+        }
+        else if (isTriangleInBounds(t, node->right->bounds)) {
+            rightTriangles->push_back(t);
+        } else {
+            currNodeIndices.push_back(t->index);
+        }
+    }
+
+    node->left->bounds = getNewBounds(leftTriangles);
+    node->right->bounds = getNewBounds(rightTriangles);
+
+    BVHBinaryNode* leftNode = createTreeHelper(leftTriangles, node->left);
+    delete leftTriangles;
+    BVHBinaryNode* rightNode = createTreeHelper(rightTriangles, node->right);
+    delete rightTriangles;
+
+    BVHBinaryNode tempNode(cudaWrite<Bounds>(node->bounds, 1), leftNode, rightNode);
+    tempNode.objectsIndex = cudaWrite<int>(currNodeIndices.data(), currNodeIndices.size());
+    tempNode.numObjects = currNodeIndices.size();
+    return cudaWrite<BVHBinaryNode>(&tempNode, 1);
 }
 
 CudaMaterial* materialToCudaMaterial(Material* material) {
@@ -582,71 +687,59 @@ CudaScene* allocateCudaScene(Scene* scene) {
     return cudaWrite<CudaScene>(&cudaScene, 1);
 }
 
-BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node) {
-    int len = localTriangles->size();
-    if (len <= 5) {
-        int* indices = new int[len];
-        for (int i=0; i<len; i++) {
-            indices[i] = localTriangles->at(i)->index;
-        }
-        node->objectsIndex = indices;
+//CudaMaterial* materialToCudaMaterialOnHost(Material* material) {
+//    CudaMaterial* newMaterial = new CudaMaterial(vec3ToFloat3(material->ambient), vec3ToFloat3(material->diffuse), vec3ToFloat3(material->specular),
+//                             material->shininess, vec3ToFloat3(material->reflective), vec3ToFloat3(material->transmissive),
+//                             material->refraction, material->roughness);
+//    return newMaterial;
+//}
+//
+//CudaRTObject* rtObjectToCudaRTObjectOnHost(RTObject* object) {
+//    switch (object->getType()) {
+//        case SPHERE: {
+//            Sphere* sphere = (Sphere*)object;
+//            return new CudaSphere(vec3ToFloat3(sphere->getPosition()), sphere->getRadius(), materialToCudaMaterial(object->getMaterial()));;
+//        }
+//        case MESH: {
+//            Mesh* mesh = (Mesh*)object;
+//            std::vector<CudaTriangle> tempTriangles;
+//            std::vector<CudaTriangle*> treeTriangles;
+//            for(int i=0; i<mesh->triangles->size(); i++) {
+//                Triangle* t = mesh->triangles->at(i);
+//                CudaTriangle* cudaTriangle = new CudaTriangle(vec3ToFloat3(t->a), vec3ToFloat3(t->b), vec3ToFloat3(t->c), i);
+//                tempTriangles.push_back(*cudaTriangle);
+//                treeTriangles.push_back(cudaTriangle);
+//            }
+//            CudaMesh tempMesh(tempTriangles.data());
+//            tempMesh.numTriangles = tempTriangles.size();
+//            BVHBinaryNode root(mesh->bounds);
+//            tempMesh.bvhRoot = createTreeHelper(&treeTriangles, &root);
+//            tempMesh.material = materialToCudaMaterial(object->getMaterial());
+//            for (CudaTriangle* t: treeTriangles) {
+//                delete t;
+//            }
+//
+//            return cudaWrite<CudaMesh>(&tempMesh, 1);
+//        }
+//}
 
-        BVHBinaryNode tempNode(cudaWrite<Bounds>(node->bounds, 1), cudaWrite<int>(indices, len), len);
-        return cudaWrite<BVHBinaryNode>(&tempNode, 1);
-    }
+//CudaScene* allocateCudaSceneOnHost(Scene* scene) {
+//    int numObjects = scene->getObjects().size();
+//    auto objects = new CudaRTObject*[numObjects];
+//    int index = 0;
+//    for (RTObject* obj : scene->getObjects()) {
+//        CudaRTObject* cudaPtr = rtObjectToCudaRTObject(obj);
+//        if (cudaPtr != nullptr) {
+//            objects[index++] = cudaPtr;
+//        }
+//    }
+//    CudaRTObject** cudaObjectsPtr = cudaWrite<CudaRTObject *>(objects, index);
+//    delete[] objects;
+//
+//    CudaScene cudaScene(cudaObjectsPtr, index);
+//    return cudaWrite<CudaScene>(&cudaScene, 1);
+//}
 
-    auto leftTriangles = new std::vector<CudaTriangle*>();
-    auto rightTriangles = new std::vector<CudaTriangle*>();
-
-    //bool xDiv, yDiv, zDiv;
-    auto nb = *node->bounds;
-    float xLen = nb.right - nb.left;
-    float yLen = nb.top - nb.bottom;
-    float zLen = nb.right - nb.left;
-    if (xLen >= yLen && xLen >= zLen) {
-        //xDiv = true;
-        float mid = (nb.left + nb.right)/2;
-        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, mid, nb.front, nb.back));
-        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, mid, nb.right, nb.front, nb.back));
-    }
-    else if (yLen >= xLen && yLen >= zLen) {
-        //yDiv = true;
-        float mid = (nb.top + nb.bottom)/2;
-        node->left = new BVHBinaryNode(new Bounds(mid, nb.bottom, nb.left, nb.right, nb.front, nb.back));
-        node->right = new BVHBinaryNode(new Bounds(nb.top, mid, nb.left, nb.right, nb.front, nb.back));
-    }
-    else if (zLen >= yLen && zLen >= xLen) {
-        //zDiv = true;
-        float mid = (nb.front + nb.back)/2;
-        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, mid, nb.back));
-        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, nb.front, mid));
-    }
-
-    for (CudaTriangle* t : *localTriangles) {
-        //divide along the axis with max length
-        if (isTriangleInBounds(t, node->left->bounds)) {
-            leftTriangles->push_back(t);
-        }
-        else if (isTriangleInBounds(t, node->right->bounds)) {
-            rightTriangles->push_back(t);
-        }
-    }
-
-    BVHBinaryNode* leftNode = createTreeHelper(leftTriangles, node->left);
-    delete leftTriangles;
-    BVHBinaryNode* rightNode = createTreeHelper(rightTriangles, node->right);
-    delete rightTriangles;
-
-    BVHBinaryNode tempNode(cudaWrite<Bounds>(node->bounds, 1), leftNode, rightNode);
-    return cudaWrite<BVHBinaryNode>(&tempNode, 1);
-}
-
-bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds) {
-    float3 pos = triangle->getPosition();
-    return (pos.x >= bounds->left && pos.x <= bounds->right) &&
-           (pos.y >= bounds->bottom && pos.y <= bounds->top) &&
-           (pos.z >= bounds->back && pos.z <= bounds->front);
-}
 
 //    std::vector<CudaTriangle*> trianglesInBounds(std::vector<CudaTriangle*>* localTriangles, Bounds* bounds) {
 //        auto leftTriangles = new std::vector<CudaTriangle*>();

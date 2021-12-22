@@ -31,6 +31,13 @@ Mesh* ObjDecoder::createMesh(const std::string& file) {
         mesh->bounds->back = std::fmin(minZ, mesh->bounds->back);
     }
 
+//    mesh->bounds->right += 0.1;
+//    mesh->bounds->left -= 0.1;
+//    mesh->bounds->top += 0.1;
+//    mesh->bounds->bottom -= 0.1;
+//    mesh->bounds->front += 0.1;
+//    mesh->bounds->back -= 0.1;
+
     std::cout << "End of Loading" << "\n";
 
     delete rawData.vertices;
