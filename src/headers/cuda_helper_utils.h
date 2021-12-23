@@ -22,7 +22,6 @@ bool isFloat3InBounds(float3 point, Bounds* bounds);
 bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds);
 BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node);
 BVHBinaryNode* createHostTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node);
-CudaMaterial* materialToCudaMaterial(Material* material);
-CudaRTObject* rtObjectToCudaRTObject(RTObject* object);
-CudaScene* sceneToCudaScene(Scene* scene);
 void cleanCudaScene(CudaScene* scene);
+
+CudaScene* allocateCudaScene(CudaScene* scene);

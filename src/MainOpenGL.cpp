@@ -16,7 +16,7 @@ Quad* quad;
 Shader* single_color_shader, *texture_shader;
 //Framebuffer* default_framebuffer;
 Texture* test_texture;
-Scene* scene;
+//Scene* scene;
 
 // -------------------------------------------------------------------------------------------------------
 const char* MainOpenGL::WINDOW_TITLE = "Raytracing with Cuda";
@@ -37,33 +37,36 @@ void MainOpenGL::init()
     quad->setTexture(test_texture);
     quad->build(texture_shader);
 
-    scene = new Scene();
-    auto mat1 = new Material(glm::vec3(0.1), glm::vec3(0.1, 0.5, 0.4),
-                                  glm::vec3(1.0), 1.0, glm::vec3(0.4),
-                                  glm::vec3(0.2), 1.0);
-    auto mat2 = new Material(glm::vec3(0.1), glm::vec3(0.6, 0.2, 0.1),
-                             glm::vec3(1.0), 1.0, glm::vec3(0.3),
-                             glm::vec3(0.2), 1.0);
-    auto mat3 = new Material(glm::vec3(0.1), glm::vec3(0.1, 0.2, 0.6),
-                             glm::vec3(1.0), 1.0, glm::vec3(0.3),
-                             glm::vec3(0.2), 1.0);
+    cudaScene = CudaScene::newHostScene();
+//    auto mat1 = new Material(glm::vec3(0.1), glm::vec3(0.1, 0.5, 0.4),
+//                                  glm::vec3(1.0), 1.0, glm::vec3(0.4),
+//                                  glm::vec3(0.2), 1.0);
+//    auto mat2 = new Material(glm::vec3(0.1), glm::vec3(0.6, 0.2, 0.1),
+//                             glm::vec3(1.0), 1.0, glm::vec3(0.3),
+//                             glm::vec3(0.2), 1.0);
+//    auto mat3 = new Material(glm::vec3(0.1), glm::vec3(0.1, 0.2, 0.6),
+//                             glm::vec3(1.0), 1.0, glm::vec3(0.3),
+//                             glm::vec3(0.2), 1.0);
 
-    scene->addObject(new Sphere(mat1, 2.0, glm::vec3(2.0, 0.0, -7.0)));
+    auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.5, 0.4));
+
+    cudaScene->addObject(new CudaSphere(make_float3(2.0, 0.0, -7.0), 2.0, mat1));
     //scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
 
 //    Mesh* mesh = ObjDecoder::createMesh("../resources/cylinder.obj");
 //    mesh->material = mat3;
 //    scene->addObject(mesh);
 
-    cudaScene = sceneToCudaScene(scene);
+    //cudaScene = sceneToCudaScene(scene);
+    auto allocatedScene = allocateCudaScene(cudaScene);
 
     cudaUtils = new CudaKernelUtils();
     cudaUtils->deviceInformation();
     cudaUtils->initializeRenderSurface(test_texture);
-    cudaUtils->renderScene(cudaScene);
+    cudaUtils->renderScene(allocatedScene);
 
     std::cout << "Size of int: " << sizeof(int) << std::endl;
-    std::cout << "Size of pointer: " << sizeof(Mesh*) << std::endl;
+    std::cout << "Size of pointer: " << sizeof(CudaMesh*) << std::endl;
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(1.0, 1.0, 1.0, 1.0);

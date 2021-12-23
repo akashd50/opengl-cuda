@@ -195,60 +195,49 @@ BVHBinaryNode* createHostTreeHelper(std::vector<CudaTriangle*>* localTriangles, 
     return node;
 }
 
-CudaMaterial* materialToCudaMaterial(Material* material) {
-    return cudaWrite<CudaMaterial>(material->toNewCudaMaterial(), 1);
-}
+//-----------------------------------------------------------------------------------------------------------------------------
 
-CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
+CudaRTObject* allocateCudaObjects(CudaRTObject* object) {
     switch (object->type) {
         case SPHERE: {
-            Sphere* sphere = (Sphere*)object;
-            CudaSphere newSphere(vec3ToFloat3(sphere->position), sphere->radius, materialToCudaMaterial(object->material));
-            return cudaWrite<CudaSphere>(&newSphere, 1);
+            auto sphere = (CudaSphere*)object;
+            CudaSphere tempSphere(sphere->position, sphere->radius, cudaWrite<CudaMaterial>(sphere->material, 1));
+            return cudaWrite<CudaSphere>(&tempSphere, 1);
         }
         case MESH: {
-            Mesh* mesh = (Mesh*)object;
-            std::vector<CudaTriangle>* tempTriangles = new std::vector<CudaTriangle>();
-            std::vector<CudaTriangle*>* treeTriangles = new std::vector<CudaTriangle*>();
-            for(int i=0; i<mesh->triangles->size(); i++) {
-                Triangle* t = mesh->triangles->at(i);
-                CudaTriangle* cudaTriangle = new CudaTriangle(vec3ToFloat3(t->a), vec3ToFloat3(t->b), vec3ToFloat3(t->c), i);
-                tempTriangles->push_back(*cudaTriangle);
-                treeTriangles->push_back(cudaTriangle);
+            auto mesh = (CudaMesh*)object;
+            auto treeTriangles = new std::vector<CudaTriangle*>();
+            for(int i=0; i<mesh->numTriangles; i++) {
+                CudaTriangle t = mesh->triangles[i];
+                treeTriangles->push_back(&t);
             }
-            CudaTriangle* cudaTrianglePtr = cudaWrite<CudaTriangle>((*tempTriangles).data(), tempTriangles->size());
+            auto cudaTrianglePtr = cudaWrite<CudaTriangle>(mesh->triangles, mesh->numTriangles);
             CudaMesh tempMesh(cudaTrianglePtr);
-            tempMesh.numTriangles = tempTriangles->size();
-            BVHBinaryNode root(mesh->bounds);
-            tempMesh.bvhRoot = createTreeHelper(treeTriangles, &root);
-            tempMesh.material = materialToCudaMaterial(object->material);
-            for (CudaTriangle* t: *treeTriangles) {
-                delete t;
-            }
-            delete treeTriangles;
-            delete tempTriangles;
+            tempMesh.numTriangles = mesh->numTriangles;
+            tempMesh.material = cudaWrite<CudaMaterial>(mesh->material, 1);
 
+            BVHBinaryNode root(getNewBounds(treeTriangles));
+            tempMesh.bvhRoot = createTreeHelper(treeTriangles, &root);
+
+            delete treeTriangles;
             return cudaWrite<CudaMesh>(&tempMesh, 1);
         }
     }
     return nullptr;
 }
 
-CudaScene* sceneToCudaScene(Scene* scene) {
-    int numObjects = scene->getObjects().size();
+CudaScene* allocateCudaScene(CudaScene* scene) {
+    int numObjects = scene->numObjects;
     auto objects = new CudaRTObject*[numObjects];
-    int index = 0;
-    for (RTObject* obj : scene->getObjects()) {
-        CudaRTObject* cudaPtr = rtObjectToCudaRTObject(obj);
-        if (cudaPtr != nullptr) {
-            objects[index++] = cudaPtr;
-        }
+    for (int i=0; i<numObjects; i++) {
+        CudaRTObject* cudaPtr = allocateCudaObjects(scene->objects[i]);
+        objects[i] = cudaPtr;
     }
-    CudaRTObject** cudaObjectsPtr = cudaWrite<CudaRTObject *>(objects, index);
+    CudaRTObject** cudaObjectsPtr = cudaWrite<CudaRTObject *>(objects, numObjects);
     delete[] objects;
 
-    CudaScene cudaScene(cudaObjectsPtr, index);
-    return cudaWrite<CudaScene>(&cudaScene, 1);
+    CudaScene tempScene(cudaObjectsPtr, numObjects);
+    return cudaWrite<CudaScene>(&tempScene, 1);
 }
 
 void cleanCudaScene(CudaScene* scene) {

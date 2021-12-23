@@ -62,11 +62,25 @@ public:
 
 class CudaMesh: public CudaRTObject {
 public:
+    std::vector<CudaTriangle>* hostTriangles;
     CudaTriangle* triangles;
     int numTriangles;
     BVHBinaryNode* bvhRoot;
     int maxBVHDepth;
+    CudaMesh(): CudaRTObject(MESH) {}
     CudaMesh(CudaTriangle* _triangles): CudaRTObject(MESH), triangles(_triangles) {}
+
+    void addTriangle(CudaTriangle _object) {
+        hostTriangles->push_back(_object);
+        numTriangles++;
+    }
+
+    static CudaMesh* newHostMesh() {
+        auto mesh = new CudaMesh();
+        mesh->hostTriangles = new std::vector<CudaTriangle>();
+        mesh->triangles = mesh->hostTriangles->data();
+        return mesh;
+    }
 };
 
 class CudaSphere: public CudaRTObject {
@@ -79,168 +93,22 @@ public:
 
 class CudaScene {
 public:
+    std::vector<CudaRTObject*>* hostObjects;
     CudaRTObject** objects;
     int numObjects;
+    CudaScene(): numObjects(0) {};
     CudaScene(CudaRTObject** _objects , int _numObjects): objects(_objects), numObjects(_numObjects) {}
-};
 
-//-------------------------
-
-class Material {
-public:
-    glm::vec3 ambient;
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-    glm::vec3 reflective;
-    glm::vec3 transmissive;
-    float refraction, roughness, shininess;;
-
-    Material() :
-            ambient(glm::vec3(0, 0, 0)), diffuse(glm::vec3(0, 0, 0)), specular(glm::vec3(0, 0, 0)), shininess(1),
-            reflective(glm::vec3(0, 0, 0)), transmissive(glm::vec3(0, 0, 0)), refraction(0) {}
-    Material(glm::vec3 _ambient, glm::vec3 _diffuse) :
-            ambient(_ambient), diffuse(_diffuse), specular(glm::vec3(0, 0, 0)), shininess(1),
-            reflective(glm::vec3(0, 0, 0)), transmissive(glm::vec3(0, 0, 0)), refraction(0) {}
-    Material(glm::vec3 _ambient, glm::vec3 _diffuse, glm::vec3 _specular, float _shininess) :
-            ambient(_ambient), diffuse(_diffuse), specular(_specular), shininess(_shininess),
-            reflective(glm::vec3(0, 0, 0)), transmissive(glm::vec3(0, 0, 0)), refraction(0) {}
-    Material(glm::vec3 _ambient, glm::vec3 _diffuse, glm::vec3 _specular, float _shininess,
-             glm::vec3 _reflective, glm::vec3 _transmissive, float _refraction) :
-            ambient(_ambient), diffuse(_diffuse), specular(_specular), shininess(_shininess),
-            reflective(_reflective), transmissive(_transmissive), refraction(_refraction) {}
-    Material(glm::vec3 _ambient, glm::vec3 _diffuse, glm::vec3 _specular, float _shininess,
-             glm::vec3 _reflective, glm::vec3 _transmissive, float _refraction, float _roughness) :
-            ambient(_ambient), diffuse(_diffuse), specular(_specular), shininess(_shininess),
-            reflective(_reflective), transmissive(_transmissive), refraction(_refraction), roughness(_roughness) {}
-
-//    CudaMaterial toCudaMaterial() {
-//        return {vec3ToFloat3(ambient), vec3ToFloat3(diffuse), vec3ToFloat3(specular),
-//                            vec3ToFloat3(reflective), vec3ToFloat3(transmissive),
-//                            refraction, roughness, shininess};
-//    }
-
-    CudaMaterial* toNewCudaMaterial() {
-        return new CudaMaterial(vec3ToFloat3(ambient), vec3ToFloat3(diffuse), vec3ToFloat3(specular),
-                vec3ToFloat3(reflective), vec3ToFloat3(transmissive),
-                refraction, roughness, shininess);
-    }
-};
-
-class RTObject {
-public:
-    int type;
-    Material* material;
-    RTObject( int _type) : type (_type) {}
-
-    virtual CudaRTObject* toNewCudaObject() = 0;
-
-    ~RTObject() {
-        delete material;
-    }
-};
-
-class Triangle {
-public:
-    glm::vec3 a, b, c;
-    Triangle(glm::vec3 _a, glm::vec3 _b, glm::vec3 _c): a(_a), b(_b), c(_c) {}
-
-    CudaTriangle toCudaObject() {
-        return {vec3ToFloat3(a), vec3ToFloat3(b), vec3ToFloat3(c)};
+    void addObject(CudaRTObject* _object) {
+        hostObjects->push_back(_object);
+        objects = hostObjects->data();
+        numObjects++;
     }
 
-    CudaTriangle* toNewCudaObject() {
-        return new CudaTriangle(vec3ToFloat3(a), vec3ToFloat3(b), vec3ToFloat3(c));
-    }
-};
-
-class Mesh: public RTObject {
-public:
-    std::vector<Triangle*>* triangles;
-    Bounds* bounds;
-    Mesh(): RTObject(MESH) {
-        //top = 0; bottom = 0; left = 0; right = 0; front = 0; back = 0;
-        bounds = new Bounds(-9999, 9999, 9999, -9999, -9999, 9999);
-        triangles = new std::vector<Triangle*>();
-    }
-
-    Mesh(std::vector<Triangle*>* _triangles): RTObject(MESH), triangles(_triangles) {}
-
-    void addTriangle(Triangle* triangle) {
-        triangles->push_back(triangle);
-    }
-
-//    CudaMesh toCudaMesh() {
-//        auto tempTriangles = new std::vector<CudaTriangle>();
-//        for(int i=0; i<triangles->size(); i++) {
-//            CudaTriangle cudaTriangle = triangles->at(i)->toCudaTriangle();
-//            cudaTriangle.index = i;
-//            tempTriangles->push_back(cudaTriangle);
-//        }
-//        return {tempTriangles->data()};
-//    }
-
-    CudaMesh* toNewCudaObject() {
-        auto tempTriangles = new std::vector<CudaTriangle>();
-        for(int i=0; i<triangles->size(); i++) {
-            CudaTriangle cudaTriangle = triangles->at(i)->toCudaObject();
-            cudaTriangle.index = i;
-            tempTriangles->push_back(cudaTriangle);
-        }
-        CudaMesh* mesh = new CudaMesh(tempTriangles->data());
-        mesh->numTriangles = tempTriangles->size();
-        mesh->material = material->toNewCudaMaterial();
-        return mesh;
-    }
-};
-
-class Sphere: public RTObject {
-public:
-    glm::vec3 position;
-    float radius;
-
-    Sphere() : RTObject(SPHERE) {}
-
-    Sphere(Material* _material, float _radius, glm::vec3 _position): RTObject(SPHERE) {
-        material = _material;
-        Sphere::radius = _radius;
-        Sphere::position = _position;
-    }
-
-    CudaSphere* toNewCudaObject() {
-        return new CudaSphere(vec3ToFloat3(position), radius, material->toNewCudaMaterial());
-    }
-};
-
-class Scene {
-    std::vector<RTObject*>* objects;
-public:
-    Scene() {
-        Scene::objects = new std::vector<RTObject*>();
-    }
-
-    void addObject(RTObject* _object) {
-        Scene::objects->push_back(_object);
-    }
-
-    std::vector<RTObject*> getObjects() {
-        return *objects;
-    }
-
-    CudaScene* toNewCudaScene() {
-        int numObjects = objects->size();
-        auto cudaObjects = new CudaRTObject*[numObjects];
-        int index = 0;
-        for (RTObject* obj : *objects) {
-            CudaRTObject* newObject = obj->toNewCudaObject();
-            cudaObjects[index++] = newObject;
-        }
-        return new CudaScene(cudaObjects, index);
-    }
-
-    ~Scene() {
-        for(RTObject* object : *objects) {
-            delete object;
-        }
-        delete objects;
+    static CudaScene* newHostScene() {
+        auto scene = new CudaScene();
+        scene->hostObjects = new std::vector<CudaRTObject*>();
+        scene->objects = scene->hostObjects->data();
+        return scene;
     }
 };
