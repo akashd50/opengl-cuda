@@ -27,10 +27,6 @@ T* cudaRead(T* src, int len) {
     return hostPointer;
 }
 
-float3 vec3ToFloat3(glm::vec3 vec) {
-    return make_float3(vec.x, vec.y, vec.z);
-}
-
 Bounds* getNewBounds(std::vector<CudaTriangle*>* triangles) {
     auto b = new Bounds();
     for(CudaTriangle* t: *triangles) {
@@ -134,18 +130,80 @@ BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHB
     return cudaWrite<BVHBinaryNode>(&tempNode, 1);
 }
 
+BVHBinaryNode* createHostTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node) {
+    int len = localTriangles->size();
+    if (len <= 5) {
+        int* indices = new int[len];
+        for (int i=0; i<len; i++) {
+            indices[i] = localTriangles->at(i)->index;
+        }
+        node->objectsIndex = indices;
+        return node;
+    }
+
+    auto leftTriangles = new std::vector<CudaTriangle*>();
+    auto rightTriangles = new std::vector<CudaTriangle*>();
+
+    //bool xDiv, yDiv, zDiv;
+    auto nb = *node->bounds;
+    float xLen = nb.right - nb.left;
+    float yLen = nb.top - nb.bottom;
+    float zLen = nb.right - nb.left;
+    if (xLen >= yLen && xLen >= zLen) {
+        //xDiv = true;
+        float mid = (nb.left + nb.right)/2;
+        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, mid, nb.front, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, mid, nb.right, nb.front, nb.back));
+    }
+    else if (yLen >= xLen && yLen >= zLen) {
+        //yDiv = true;
+        float mid = (nb.top + nb.bottom)/2;
+        node->left = new BVHBinaryNode(new Bounds(mid, nb.bottom, nb.left, nb.right, nb.front, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, mid, nb.left, nb.right, nb.front, nb.back));
+    }
+    else if (zLen >= yLen && zLen >= xLen) {
+        //zDiv = true;
+        float mid = (nb.front + nb.back)/2;
+        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, mid, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, nb.front, mid));
+    }
+
+    std::vector<int> currNodeIndices;
+    for (CudaTriangle* t : *localTriangles) {
+        //divide along the axis with max length
+        if (isTriangleInBounds(t, node->left->bounds)) {
+            leftTriangles->push_back(t);
+        }
+        else if (isTriangleInBounds(t, node->right->bounds)) {
+            rightTriangles->push_back(t);
+        } else {
+            currNodeIndices.push_back(t->index);
+        }
+    }
+    delete node->left->bounds;
+    delete node->right->bounds;
+    node->left->bounds = getNewBounds(leftTriangles);
+    node->right->bounds = getNewBounds(rightTriangles);
+
+    node->left = createTreeHelper(leftTriangles, node->left);
+    delete leftTriangles;
+    node->right = createTreeHelper(rightTriangles, node->right);
+    delete rightTriangles;
+
+    node->objectsIndex = currNodeIndices.data();
+    node->numObjects = currNodeIndices.size();
+    return node;
+}
+
 CudaMaterial* materialToCudaMaterial(Material* material) {
-    CudaMaterial newMaterial(vec3ToFloat3(material->ambient), vec3ToFloat3(material->diffuse), vec3ToFloat3(material->specular),
-                             material->shininess, vec3ToFloat3(material->reflective), vec3ToFloat3(material->transmissive),
-                             material->refraction, material->roughness);
-    return cudaWrite<CudaMaterial>(&newMaterial, 1);
+    return cudaWrite<CudaMaterial>(material->toNewCudaMaterial(), 1);
 }
 
 CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
-    switch (object->getType()) {
+    switch (object->type) {
         case SPHERE: {
             Sphere* sphere = (Sphere*)object;
-            CudaSphere newSphere(vec3ToFloat3(sphere->getPosition()), sphere->getRadius(), materialToCudaMaterial(object->getMaterial()));
+            CudaSphere newSphere(vec3ToFloat3(sphere->position), sphere->radius, materialToCudaMaterial(object->material));
             return cudaWrite<CudaSphere>(&newSphere, 1);
         }
         case MESH: {
@@ -163,7 +221,7 @@ CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
             tempMesh.numTriangles = tempTriangles->size();
             BVHBinaryNode root(mesh->bounds);
             tempMesh.bvhRoot = createTreeHelper(treeTriangles, &root);
-            tempMesh.material = materialToCudaMaterial(object->getMaterial());
+            tempMesh.material = materialToCudaMaterial(object->material);
             for (CudaTriangle* t: *treeTriangles) {
                 delete t;
             }

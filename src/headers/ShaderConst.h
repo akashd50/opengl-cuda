@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include <string>
+#include <cuda_runtime.h>
 
 const static std::string IN_MODEL = "model";
 const static std::string IN_TEXTURE = "in_texture";
@@ -23,3 +24,8 @@ const static std::string IN_LIGHTING_TEX_I = "lighting_texture_i";
 const static std::string IN_LIGHTING_TEX_II= "lighting_texture_ii";
 const static std::string IN_LIGHTING_TEX_III = "lighting_texture_iii";
 const static std::string IN_LIGHTING_TEX_IV = "lighting_texture_iv";
+
+__device__ const int SPHERE = 1;
+__device__ const int MESH = 2;
+__device__ const int TRIANGLE = 3;
+__device__ const int PLANE = 4;

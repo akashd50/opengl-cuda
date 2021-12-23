@@ -27,9 +27,10 @@ public:
 };
 //----------------------------------------------------------------------------------------------------------------------
 class Stack {
+public:
     BVHBinaryNode** stack;
     int pointer;
-    __device__ Stack() {
+    __device__ void init() {
         stack = (BVHBinaryNode**)malloc(10 * sizeof(BVHBinaryNode*));
         pointer = 0;
     }
@@ -38,19 +39,30 @@ class Stack {
         stack[pointer++] = val;
     }
 
-    __device__ BVHBinaryNode* pop(BVHBinaryNode* val) {
+    __device__ void pop() {
         pointer--;
-        return stack[pointer];
+    }
+
+    __device__ BVHBinaryNode* top() {
+        return stack[pointer - 1];
+    }
+
+    __device__ bool empty() {
+        return pointer == 0;
+    }
+
+    __device__ void clean() {
+        free(stack);
     }
 };
 //----------------------------------------------------------------------------------------------------------------------
 
-class CudaUtils {
+class CudaKernelUtils {
 private:
     cudaSurfaceObject_t viewCudaSurfaceObject;
 public:
-    CudaUtils();
-    ~CudaUtils();
+    CudaKernelUtils();
+    ~CudaKernelUtils();
     void initializeRenderSurface(Texture* texture);
     void renderScene(CudaScene* cudaScene);
     void onClick(int x, int y, CudaScene* cudaScene);

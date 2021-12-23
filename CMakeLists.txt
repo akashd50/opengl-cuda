@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB SRC_FILES "src/*.cpp")
-add_executable(Main ${SRC_FILES} src/CudaUtils.cu)
+add_executable(Main ${SRC_FILES} src/CudaKernelUtils.cu)
 # set_source_files_properties(main.cpp PROPERTIES LANGUAGE CUDA)
 # set_source_files_properties(MainOpenGL.cpp PROPERTIES LANGUAGE CUDA)
 

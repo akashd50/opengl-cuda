@@ -1,7 +1,7 @@
 #pragma once
 #include <iostream>
 #include "glm/glm.hpp"
-#include "headers/CudaUtils.cuh"
+#include "headers/CudaKernelUtils.cuh"
 #include <cuda.h>
 #include <cuda_gl_interop.h>
 #include <vector_functions.h>
@@ -199,6 +199,8 @@ __device__ __host__ void swap(float &a, float &b) {
  */
 
 __device__ __host__ float checkHitOnAABB(float3 e, float3 d, Bounds* bounds, bool debug) {
+    if (bounds == nullptr) return MAX_T;
+
     float tmin = (bounds->left - e.x) / d.x;
     float tmax = (bounds->right - e.x) / d.x;
 
@@ -235,11 +237,18 @@ __device__ __host__ float checkHitOnAABB(float3 e, float3 d, Bounds* bounds, boo
     return tmin;
 }
 
-__device__ float checkHitOnMeshHelper(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
+__device__ float checkHitsOnNode(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
+    if (debug) {
+        printf("Starting to check hits on triangles in node NumObjects(%d)\n", node->numObjects);
+    }
     float minT = MAX_T;
-    if (node->numObjects != 0) { // Is a leaf node
+    if (node != nullptr && node->numObjects != 0) { // Is a leaf node
         for (int j=0; j<node->numObjects; j++) {
-            CudaTriangle t = mesh->triangles[node->objectsIndex[j]];
+            int objIndex = node->objectsIndex[j];
+            if (debug) {
+                printf("Current triangle index (%d)\n", objIndex);
+            }
+            CudaTriangle t = mesh->triangles[objIndex];
             float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
             if(debug) {
                 printf("Checking hits on triangle (%d) -- (%f)\n", node->objectsIndex[j], triangleHit);
@@ -252,6 +261,84 @@ __device__ float checkHitOnMeshHelper(float3 eye, float3 ray, BVHBinaryNode* nod
             }
         }
     }
+    if (debug) {
+        printf("Finished checking hits on triangles in node NumObjects(%d)\n", node->numObjects);
+    }
+
+    return minT;
+}
+
+__device__ float checkHitOnMeshHelperNR(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
+    Stack* stack = (Stack*)malloc(sizeof(Stack));
+    stack->init();
+
+    float minT = checkHitOnAABB(eye, ray, node->bounds, debug);
+    if (minT != MAX_T && minT > 0) {
+        stack->push(node);
+    } else {
+        return minT;
+    }
+
+    // start from the root node (set current node to the root node)
+    BVHBinaryNode* curr = node;
+
+    // if the current node is null and the stack is also empty, we are done
+    while (!stack->empty() || curr != nullptr)
+    {
+        // if the current node exists, push it into the stack (defer it)
+        // and move to its left child
+        if (curr != nullptr)
+        {
+            minT = min(checkHitsOnNode(eye, ray, curr, mesh, debug), minT);
+
+            if (curr->left != nullptr) {
+                float leftT = checkHitOnAABB(eye, ray, curr->left->bounds, debug);
+                if (leftT != MAX_T && leftT <= minT) {
+                    if (debug) {
+                        printf("Checking left LeftT(%f) MinT(%f)\n", leftT, minT);
+                    }
+                    stack->push(curr->left);
+                    curr = curr->left;
+                } else {
+                    // if not hit
+                    curr = nullptr;
+                }
+            } else {
+                curr = nullptr;
+            }
+        }
+        else {
+            // otherwise, if the current node is null, pop an element from the stack,
+            // print it, and finally set the current node to its right child
+            curr = stack->top();
+            stack->pop();
+
+            if (curr->right != nullptr) {
+                float rightT = checkHitOnAABB(eye, ray, curr->right->bounds, debug);
+                if (rightT != MAX_T && rightT <= minT) {
+                    if (debug) {
+                        printf("Checking right RightT(%f) MinT(%f)\n", rightT, minT);
+                        printf("Current->right NULL (%d)\n", curr->right == nullptr);
+                    }
+                    curr = curr->right;
+                } else {
+                    // if not hit
+                    curr = nullptr;
+                }
+            } else {
+                // if not hit
+                curr = nullptr;
+            }
+        }
+    }
+
+    stack->clean();
+    free(stack);
+}
+
+__device__ float checkHitOnMeshHelper(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
+
+    float minT = checkHitsOnNode(eye, ray, node, mesh, debug);
 
     if (node->left == nullptr || node->right == nullptr) {
         return minT;
@@ -290,20 +377,21 @@ __device__ float checkHitOnMeshHelper(float3 eye, float3 ray, BVHBinaryNode* nod
 }
 
 __device__ float checkHitOnMesh(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
-    float t = checkHitOnAABB(eye, ray, node->bounds, debug);
-    if (debug) {
-        printf("Main AABB Hit @ (%f)\n", t);
-        printf("\n\n");
-        print2DUtil(node, 0);
-        printf("\n\n");
-
-    }
-
-    if (t != MAX_T) { // If node is hit
-        return checkHitOnMeshHelper(eye, ray, node, mesh, debug);
-    } else {
-        return MAX_T;
-    }
+//    float t = checkHitOnAABB(eye, ray, node->bounds, debug);
+//    if (debug) {
+//        printf("Main AABB Hit @ (%f)\n", t);
+//        printf("\n\n");
+//        print2DUtil(node, 0);
+//        printf("\n\n");
+//
+//    }
+//
+//    if (t != MAX_T) { // If node is hit
+//        return checkHitOnMeshHelper(eye, ray, node, mesh, debug);
+//    } else {
+//        return MAX_T;
+//    }
+    return checkHitOnMeshHelperNR(eye, ray, node, mesh, debug);
 }
 
 __device__ float check_hit_on_sphere(float3 eye, float3 ray, float3 center, float radius) {
@@ -414,7 +502,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
-    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, 2, false));
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, 1, false));
 
     surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
 }
@@ -423,7 +511,7 @@ __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, C
 {
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
-    printf("Ray (%f, %f, %f)\n", ray.x, ray.y, ray.z);
+    printf("\n\nRay (%f, %f, %f)\n", ray.x, ray.y, ray.z);
     uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, 4, true));
     printf("Final Color: (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
     surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
@@ -433,14 +521,14 @@ __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, C
 //---------------------------------------------Cuda Utils Class Definition----------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 
-CudaUtils::CudaUtils() {
+CudaKernelUtils::CudaKernelUtils() {
 }
 
-CudaUtils::~CudaUtils() {
+CudaKernelUtils::~CudaKernelUtils() {
 
 }
 
-void CudaUtils::initializeRenderSurface(Texture* texture) {
+void CudaKernelUtils::initializeRenderSurface(Texture* texture) {
     struct cudaGraphicsResource *vbo_res;
     // register this texture with CUDA
     //cudaGraphicsGLRegisterImage(&vbo_res, texture->getTextureId(),GL_TEXTURE_2D, cudaGraphicsMapFlagsReadOnly);
@@ -458,20 +546,20 @@ void CudaUtils::initializeRenderSurface(Texture* texture) {
     check(cudaCreateSurfaceObject(&viewCudaSurfaceObject, &viewCudaArrayResourceDesc));
 }
 
-void CudaUtils::renderScene(CudaScene* cudaScene) {
-    kernel_traceRays<<<512, 512>>>(CudaUtils::viewCudaSurfaceObject, cudaScene);
+void CudaKernelUtils::renderScene(CudaScene* cudaScene) {
+    kernel_traceRays<<<512, 512>>>(CudaKernelUtils::viewCudaSurfaceObject, cudaScene);
     check(cudaDeviceSynchronize());
     //test hits
 //    Bounds* test = new Bounds(0.5, -0.5, -0.5, 0.5, -2.0, -3.0);
 //    std::cout << "AABB HIT: " << checkHitOnAABB(make_float3(0.0, 0.0, 0.0), make_float3(0.0, 0.0, -1.0), test) << std::endl;
 }
 
-void CudaUtils::onClick(int x, int y, CudaScene* cudaScene) {
-    kernel_traceSingleRay<<<1, 1>>>(CudaUtils::viewCudaSurfaceObject, x, y, cudaScene);
+void CudaKernelUtils::onClick(int x, int y, CudaScene* cudaScene) {
+    kernel_traceSingleRay<<<1, 1>>>(CudaKernelUtils::viewCudaSurfaceObject, x, y, cudaScene);
     check(cudaDeviceSynchronize());
 }
 
-void CudaUtils::deviceInformation() {
+void CudaKernelUtils::deviceInformation() {
     int nDevices;
     cudaGetDeviceCount(&nDevices);
     for (int i = 0; i < nDevices; i++) {

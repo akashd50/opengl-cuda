@@ -2,7 +2,7 @@
 #include <glm/glm.hpp>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
-#include "headers/CudaUtils.cuh"
+#include "headers/CudaKernelUtils.cuh"
 #include "headers/MainOpenGL.h"
 #include "headers/Quad.h"
 #include "headers/ObjDecoder.h"
@@ -10,7 +10,7 @@
 #define M_PI 3.14159265358979323846264338327950288
 
 //----------------------------------------------------------------------------
-CudaUtils* cudaUtils;
+CudaKernelUtils* cudaUtils;
 CudaScene* cudaScene;
 Quad* quad;
 Shader* single_color_shader, *texture_shader;
@@ -51,16 +51,19 @@ void MainOpenGL::init()
     scene->addObject(new Sphere(mat1, 2.0, glm::vec3(2.0, 0.0, -7.0)));
     //scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
 
-    Mesh* mesh = ObjDecoder::createMesh("../resources/cylinder.obj");
-    mesh->setMaterial(mat3);
-    scene->addObject(mesh);
+//    Mesh* mesh = ObjDecoder::createMesh("../resources/cylinder.obj");
+//    mesh->material = mat3;
+//    scene->addObject(mesh);
 
     cudaScene = sceneToCudaScene(scene);
 
-    cudaUtils = new CudaUtils();
+    cudaUtils = new CudaKernelUtils();
     cudaUtils->deviceInformation();
     cudaUtils->initializeRenderSurface(test_texture);
     cudaUtils->renderScene(cudaScene);
+
+    std::cout << "Size of int: " << sizeof(int) << std::endl;
+    std::cout << "Size of pointer: " << sizeof(Mesh*) << std::endl;
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(1.0, 1.0, 1.0, 1.0);
