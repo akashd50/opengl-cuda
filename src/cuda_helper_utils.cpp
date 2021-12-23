@@ -118,7 +118,8 @@ BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHB
             currNodeIndices.push_back(t->index);
         }
     }
-
+    delete node->left->bounds;
+    delete node->right->bounds;
     node->left->bounds = getNewBounds(leftTriangles);
     node->right->bounds = getNewBounds(rightTriangles);
 
@@ -149,23 +150,25 @@ CudaRTObject* rtObjectToCudaRTObject(RTObject* object) {
         }
         case MESH: {
             Mesh* mesh = (Mesh*)object;
-            std::vector<CudaTriangle> tempTriangles;
-            std::vector<CudaTriangle*> treeTriangles;
+            std::vector<CudaTriangle>* tempTriangles = new std::vector<CudaTriangle>();
+            std::vector<CudaTriangle*>* treeTriangles = new std::vector<CudaTriangle*>();
             for(int i=0; i<mesh->triangles->size(); i++) {
                 Triangle* t = mesh->triangles->at(i);
                 CudaTriangle* cudaTriangle = new CudaTriangle(vec3ToFloat3(t->a), vec3ToFloat3(t->b), vec3ToFloat3(t->c), i);
-                tempTriangles.push_back(*cudaTriangle);
-                treeTriangles.push_back(cudaTriangle);
+                tempTriangles->push_back(*cudaTriangle);
+                treeTriangles->push_back(cudaTriangle);
             }
-            CudaTriangle* cudaTrianglePtr = cudaWrite<CudaTriangle>(tempTriangles.data(), tempTriangles.size());
+            CudaTriangle* cudaTrianglePtr = cudaWrite<CudaTriangle>((*tempTriangles).data(), tempTriangles->size());
             CudaMesh tempMesh(cudaTrianglePtr);
-            tempMesh.numTriangles = tempTriangles.size();
+            tempMesh.numTriangles = tempTriangles->size();
             BVHBinaryNode root(mesh->bounds);
-            tempMesh.bvhRoot = createTreeHelper(&treeTriangles, &root);
+            tempMesh.bvhRoot = createTreeHelper(treeTriangles, &root);
             tempMesh.material = materialToCudaMaterial(object->getMaterial());
-            for (CudaTriangle* t: treeTriangles) {
+            for (CudaTriangle* t: *treeTriangles) {
                 delete t;
             }
+            delete treeTriangles;
+            delete tempTriangles;
 
             return cudaWrite<CudaMesh>(&tempMesh, 1);
         }

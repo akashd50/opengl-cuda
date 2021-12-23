@@ -2,7 +2,7 @@
 #include <vector>
 #include <string>
 #include <glm/glm.hpp>
-#include "headers/CudaUtils.cuh"
+#include "headers/cuda_helper_utils.h"
 
 struct config {
     int v1, v2, v3;

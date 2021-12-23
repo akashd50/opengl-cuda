@@ -147,7 +147,7 @@ __device__ void print2DUtil(BVHBinaryNode *root, int space)
     //print data
     printf("[{");
     //if (root->numObjects == 0) {
-    printBounds(root->bounds);
+    //printBounds(root->bounds);
     //}
     printf("} ");
     for (int i=0; i<root->numObjects; i++) {
@@ -292,11 +292,11 @@ __device__ float checkHitOnMeshHelper(float3 eye, float3 ray, BVHBinaryNode* nod
 __device__ float checkHitOnMesh(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
     float t = checkHitOnAABB(eye, ray, node->bounds, debug);
     if (debug) {
-//        printf("\n\n");
-//        print2DUtil(node, 0);
-//        printf("\n\n");
-
         printf("Main AABB Hit @ (%f)\n", t);
+        printf("\n\n");
+        print2DUtil(node, 0);
+        printf("\n\n");
+
     }
 
     if (t != MAX_T) { // If node is hit
@@ -360,6 +360,12 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
                     printf("doHitTest @ index (%d) with t (%f)\n", i, meshHit);
                 }
             }
+//            if (debug) {
+//                for (int k=0; k<mesh->numTriangles; k++) {
+//                    CudaTriangle tt = mesh->triangles[k];
+//                    printf("Index(%d); (%f, %f, %f)\n", k, tt.a.x, tt.b.x, tt.c.x);
+//                }
+//            }
 //            for (int j=0; j<mesh->numTriangles; j++) {
 //                CudaTriangle t = mesh->triangles[j];
 //                float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
@@ -375,8 +381,8 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
     return hit;
 }
 
-__device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int bounceIndex, bool debug) {
-    if (bounceIndex > 1) {
+__device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int bounceIndex, int maxBounces, bool debug) {
+    if (bounceIndex >= maxBounces) {
         //printf("Bounce greater than 1 ; %d", bounceIndex);
         return make_float3(0, 0, 0);
     }
@@ -389,7 +395,7 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int b
             printf("HitInfo(%d); Hit T(%f) @ (%f, %f, %f) - Reflected(%f, %f, %f)\n", hitInfo.index, hitInfo.t, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
                    reflectedRay.x, reflectedRay.y, reflectedRay.z);
         }
-        float3 reflectedRayColor = hitInfo.object->material->reflective * traceSingleRay(hitInfo.hitPoint, reflectedRay, scene, bounceIndex + 1, debug);
+        float3 reflectedRayColor = hitInfo.object->material->reflective * traceSingleRay(hitInfo.hitPoint, reflectedRay, scene,bounceIndex + 1, maxBounces, debug);
         color = hitInfo.object->material->diffuse + reflectedRayColor;
 
     } else {
@@ -408,7 +414,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
-    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, false));
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, 2, false));
 
     surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
 }
@@ -418,7 +424,7 @@ __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, C
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
     printf("Ray (%f, %f, %f)\n", ray.x, ray.y, ray.z);
-    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, true));
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, 4, true));
     printf("Final Color: (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
     surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
 }
@@ -454,7 +460,7 @@ void CudaUtils::initializeRenderSurface(Texture* texture) {
 
 void CudaUtils::renderScene(CudaScene* cudaScene) {
     kernel_traceRays<<<512, 512>>>(CudaUtils::viewCudaSurfaceObject, cudaScene);
-
+    check(cudaDeviceSynchronize());
     //test hits
 //    Bounds* test = new Bounds(0.5, -0.5, -0.5, 0.5, -2.0, -3.0);
 //    std::cout << "AABB HIT: " << checkHitOnAABB(make_float3(0.0, 0.0, 0.0), make_float3(0.0, 0.0, -1.0), test) << std::endl;
@@ -462,6 +468,7 @@ void CudaUtils::renderScene(CudaScene* cudaScene) {
 
 void CudaUtils::onClick(int x, int y, CudaScene* cudaScene) {
     kernel_traceSingleRay<<<1, 1>>>(CudaUtils::viewCudaSurfaceObject, x, y, cudaScene);
+    check(cudaDeviceSynchronize());
 }
 
 void CudaUtils::deviceInformation() {

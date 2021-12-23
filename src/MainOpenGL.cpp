@@ -49,9 +49,9 @@ void MainOpenGL::init()
                              glm::vec3(0.2), 1.0);
 
     scene->addObject(new Sphere(mat1, 2.0, glm::vec3(2.0, 0.0, -7.0)));
-    scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
+    //scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
 
-    Mesh* mesh = ObjDecoder::createMesh("../resources/cube.obj");
+    Mesh* mesh = ObjDecoder::createMesh("../resources/cylinder.obj");
     mesh->setMaterial(mat3);
     scene->addObject(mesh);
 

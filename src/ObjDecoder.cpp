@@ -4,7 +4,6 @@
 #include <iostream>
 #include "headers/ObjDecoder.h"
 #include "headers/Utils.h"
-#include "headers/CudaUtils.cuh"
 
 Mesh* ObjDecoder::createMesh(const std::string& file) {
     Mesh* mesh = new Mesh();

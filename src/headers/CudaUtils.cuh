@@ -25,7 +25,24 @@ public:
         return t != MAX_T;
     }
 };
+//----------------------------------------------------------------------------------------------------------------------
+class Stack {
+    BVHBinaryNode** stack;
+    int pointer;
+    __device__ Stack() {
+        stack = (BVHBinaryNode**)malloc(10 * sizeof(BVHBinaryNode*));
+        pointer = 0;
+    }
 
+    __device__ void push(BVHBinaryNode* val) {
+        stack[pointer++] = val;
+    }
+
+    __device__ BVHBinaryNode* pop(BVHBinaryNode* val) {
+        pointer--;
+        return stack[pointer];
+    }
+};
 //----------------------------------------------------------------------------------------------------------------------
 
 class CudaUtils {

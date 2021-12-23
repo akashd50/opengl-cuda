@@ -238,6 +238,7 @@ public:
     CudaTriangle* triangles;
     int numTriangles;
     BVHBinaryNode* bvhRoot;
+    int maxBVHDepth;
     CudaMesh(CudaTriangle* _triangles): CudaRTObject(MESH), triangles(_triangles) {}
 
 //    void createOctoTree(Bounds bounds) {
