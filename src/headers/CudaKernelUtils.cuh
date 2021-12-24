@@ -9,10 +9,16 @@
 
 //----------------------------------------------------------------------------------------------------------------------
 
-__device__ const float MIN_T = -9999.0;
+__device__ const float MIN_T = -999999.0;
 __device__ const float MAX_T = 999999.0;
 __device__ const float HIT_T_OFFSET = 0.01;
-__device__ const float HIT_T_OFFSET_1 = 0.0001;
+__device__ const float HIT_T_OFFSET_1 = 0.00005;
+
+class MinMaxT {
+public:
+    float minT, maxT;
+    __device__ MinMaxT(float _minT, float _maxT): minT(_minT), maxT(_maxT) {}
+};
 
 class HitInfo {
 public:

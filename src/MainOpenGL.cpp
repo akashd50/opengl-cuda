@@ -43,7 +43,7 @@ void MainOpenGL::init()
     mat1->reflective = make_float3(0.4, 0.4, 0.4);
 
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.7, 0.3, 0.2));
-    mat3->reflective = make_float3(0.4, 0.4, 0.4);
+    mat3->reflective = make_float3(0.1, 0.1, 0.1);
 
     cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));
     //scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
