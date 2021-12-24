@@ -5,7 +5,7 @@
 #include <surface_functions.h>
 #include <surface_indirect_functions.h>
 #include <cuda_runtime.h>
-#include "cuda_helper_utils.h"
+#include "cuda_allocation_utils.h"
 
 //----------------------------------------------------------------------------------------------------------------------
 
