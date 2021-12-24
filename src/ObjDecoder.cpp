@@ -7,8 +7,8 @@
 
 CudaMesh* ObjDecoder::createMesh(const std::string& file) {
     CudaMesh* mesh = CudaMesh::newHostMesh();
+    BVHBinaryNode* root = mesh->bvhRoot;
     RawData rawData = readFile(file);
-    //auto triangles = new std::vector<Triangle*>;
     for (int i = 0; i < rawData.faceConfiguration->size(); i++) {
         config curr = rawData.faceConfiguration->at(i);
         glm::vec3 v1 = rawData.vertices->at(curr.v1);
@@ -16,18 +16,18 @@ CudaMesh* ObjDecoder::createMesh(const std::string& file) {
         glm::vec3 v3 = rawData.vertices->at(curr.v3);
         mesh->addTriangle(CudaTriangle(vec3ToFloat3(v1), vec3ToFloat3(v2), vec3ToFloat3(v3)));
 
-//        float maxX = std::fmax(std::fmax(v1.x, v2.x), v3.x);
-//        float minX = std::fmin(std::fmin(v1.x, v2.x), v3.x);
-//        float maxY = std::fmax(std::fmax(v1.y, v2.y), v3.y);
-//        float minY = std::fmin(std::fmin(v1.y, v2.y), v3.y);
-//        float maxZ = std::fmax(std::fmax(v1.z, v2.z), v3.z);
-//        float minZ = std::fmin(std::fmin(v1.z, v2.z), v3.z);
-//        mesh->bounds->right = std::fmax(maxX, mesh->bounds->right);
-//        mesh->bounds->left = std::fmin(minX, mesh->bounds->left);
-//        mesh->bounds->top = std::fmax(maxY, mesh->bounds->top);
-//        mesh->bounds->bottom = std::fmin(minY, mesh->bounds->bottom);
-//        mesh->bounds->front = std::fmax(maxZ, mesh->bounds->front);
-//        mesh->bounds->back = std::fmin(minZ, mesh->bounds->back);
+        float maxX = std::fmax(std::fmax(v1.x, v2.x), v3.x);
+        float minX = std::fmin(std::fmin(v1.x, v2.x), v3.x);
+        float maxY = std::fmax(std::fmax(v1.y, v2.y), v3.y);
+        float minY = std::fmin(std::fmin(v1.y, v2.y), v3.y);
+        float maxZ = std::fmax(std::fmax(v1.z, v2.z), v3.z);
+        float minZ = std::fmin(std::fmin(v1.z, v2.z), v3.z);
+        root->bounds->right = std::fmax(maxX, root->bounds->right);
+        root->bounds->left = std::fmin(minX, root->bounds->left);
+        root->bounds->top = std::fmax(maxY, root->bounds->top);
+        root->bounds->bottom = std::fmin(minY, root->bounds->bottom);
+        root->bounds->front = std::fmax(maxZ, root->bounds->front);
+        root->bounds->back = std::fmin(minZ, root->bounds->back);
     }
 
 //    mesh->bounds->right += 0.1;
@@ -37,7 +37,7 @@ CudaMesh* ObjDecoder::createMesh(const std::string& file) {
 //    mesh->bounds->front += 0.1;
 //    mesh->bounds->back -= 0.1;
 
-    std::cout << "End of Loading" << "\n";
+    std::cout << "End of Loading... - " << file << "\n";
 
     delete rawData.vertices;
     delete rawData.uvs;

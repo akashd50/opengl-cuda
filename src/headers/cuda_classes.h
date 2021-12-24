@@ -72,13 +72,23 @@ public:
 
     void addTriangle(CudaTriangle _object) {
         hostTriangles->push_back(_object);
+        triangles = hostTriangles->data();
         numTriangles++;
     }
+
+    void finalize() {
+        auto allIndices = new std::vector<int>();
+        for (int i=0; i<hostTriangles->size(); i++) allIndices->push_back(i);
+        bvhRoot = createMeshTree(hostTriangles, allIndices, bvhRoot);
+    }
+
+    BVHBinaryNode* createMeshTree(std::vector<CudaTriangle>* triangles, std::vector<int>* indices, BVHBinaryNode* node);
 
     static CudaMesh* newHostMesh() {
         auto mesh = new CudaMesh();
         mesh->hostTriangles = new std::vector<CudaTriangle>();
         mesh->triangles = mesh->hostTriangles->data();
+        mesh->bvhRoot = new BVHBinaryNode();
         return mesh;
     }
 };

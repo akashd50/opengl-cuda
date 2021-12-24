@@ -17,11 +17,11 @@ inline void _check(cudaError_t code, char *file, int line);
 //T* cudaRead(T* data, int len);
 
 
-Bounds* getNewBounds(std::vector<CudaTriangle*>* triangles);
-bool isFloat3InBounds(float3 point, Bounds* bounds);
-bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds);
-BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node);
-BVHBinaryNode* createHostTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node);
+//Bounds* getNewBounds(std::vector<CudaTriangle*>* triangles);
+//bool isFloat3InBounds(float3 point, Bounds* bounds);
+//bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds);
+//BVHBinaryNode* createTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node);
+//BVHBinaryNode* createHostTreeHelper(std::vector<CudaTriangle*>* localTriangles, BVHBinaryNode* node);
 void cleanCudaScene(CudaScene* scene);
 
 CudaScene* allocateCudaScene(CudaScene* scene);

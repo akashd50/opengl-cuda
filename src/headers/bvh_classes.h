@@ -21,7 +21,7 @@ public:
     Bounds* bounds;
     int* objectsIndex;
     int numObjects;
-    BVHBinaryNode(): numObjects(0) {}
+    BVHBinaryNode(): numObjects(0), bounds(new Bounds()) {}
     BVHBinaryNode(Bounds* _bounds): bounds(_bounds), left(nullptr), right(nullptr), objectsIndex(nullptr), numObjects(0) {}
     BVHBinaryNode(Bounds* _bounds, int* _objectsIndex, int _numObject): bounds(_bounds), objectsIndex(_objectsIndex),
                                                                         left(nullptr), right(nullptr), numObjects(_numObject) {}
