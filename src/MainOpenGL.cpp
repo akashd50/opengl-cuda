@@ -11,19 +11,19 @@
 
 //----------------------------------------------------------------------------
 CudaKernelUtils* cudaUtils;
-CudaScene* cudaScene;
+CudaScene* cudaScene, *allocatedScene;
 Quad* quad;
 Shader* single_color_shader, *texture_shader;
 //Framebuffer* default_framebuffer;
 Texture* test_texture;
-//Scene* scene;
+// ---------------------------------------------------------------------------------------------------------------------
 
-// -------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 const char* MainOpenGL::WINDOW_TITLE = "Raytracing with Cuda";
 const double MainOpenGL::FRAME_RATE_MS = 1000.0 / 60.0;
 int MainOpenGL::WIDTH = 512;
 int MainOpenGL::HEIGHT = 512;
-// -------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
 void MainOpenGL::init()
 {
     //default_framebuffer = new Framebuffer(600, 600);
@@ -38,25 +38,21 @@ void MainOpenGL::init()
     quad->build(texture_shader);
 
     cudaScene = CudaScene::newHostScene();
-//    auto mat1 = new Material(glm::vec3(0.1), glm::vec3(0.1, 0.5, 0.4),
-//                                  glm::vec3(1.0), 1.0, glm::vec3(0.4),
-//                                  glm::vec3(0.2), 1.0);
-//    auto mat2 = new Material(glm::vec3(0.1), glm::vec3(0.6, 0.2, 0.1),
-//                             glm::vec3(1.0), 1.0, glm::vec3(0.3),
-//                             glm::vec3(0.2), 1.0);
-    auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.7, 0.3, 0.2));
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.5, 0.4));
+    mat1->reflective = make_float3(0.4, 0.4, 0.4);
+
+    auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.7, 0.3, 0.2));
+    mat3->reflective = make_float3(0.4, 0.4, 0.4);
 
     cudaScene->addObject(new CudaSphere(make_float3(2.0, 0.0, -7.0), 2.0, mat1));
     //scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
 
-    CudaMesh* mesh = ObjDecoder::createMesh("../resources/cube.obj");
+    CudaMesh* mesh = ObjDecoder::createMesh("../resources/cylinder.obj");
     mesh->material = mat3;
     cudaScene->addObject(mesh);
 
-    //cudaScene = sceneToCudaScene(scene);
-    auto allocatedScene = allocateCudaScene(cudaScene);
+    allocatedScene = allocateCudaScene(cudaScene);
 
     cudaUtils = new CudaKernelUtils();
     cudaUtils->deviceInformation();
@@ -101,7 +97,7 @@ void MainOpenGL::keyboard(unsigned char key, int x, int y)
 void MainOpenGL::mouse(int button, int state, int x, int y)
 {
     if (state == GLUT_DOWN) {
-        cudaUtils->onClick(x, y, cudaScene);
+        cudaUtils->onClick(x, y, allocatedScene);
     }
 }
 

@@ -81,7 +81,7 @@ CudaMesh::CudaMesh(CudaTriangle* _triangles): CudaRTObject(MESH), triangles(_tri
 void CudaMesh::addTriangle(CudaTriangle _object) {
     hostTriangles->push_back(_object);
     triangles = hostTriangles->data();
-    numTriangles = hostTriangles->size();
+    numTriangles++;
 }
 
 void CudaMesh::finalize() {
@@ -93,7 +93,7 @@ void CudaMesh::finalize() {
 CudaMesh* CudaMesh::newHostMesh() {
     auto mesh = new CudaMesh();
     mesh->hostTriangles = new std::vector<CudaTriangle>();
-    mesh->triangles = mesh->hostTriangles->data();
+    //mesh->triangles = mesh->hostTriangles->data();
     mesh->numTriangles = 0;
     mesh->bvhRoot = new BVHBinaryNode();
     return mesh;
@@ -135,7 +135,7 @@ BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangle
         node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, nb.front, mid));
     }
 
-    std::vector<int> currNodeIndices;
+    auto currNodeIndices = new std::vector<int>();
     for (int index : *indices) {
         //divide along the axis with max length
         CudaTriangle t = localTriangles->at(index);
@@ -145,7 +145,7 @@ BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangle
         else if (isTriangleInBounds(&t, node->right->bounds)) {
             rightTriangles->push_back(index);
         } else {
-            currNodeIndices.push_back(index);
+            currNodeIndices->push_back(index);
         }
     }
 
@@ -159,8 +159,8 @@ BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangle
     node->right = createMeshTree(localTriangles, rightTriangles, node->right);
     delete rightTriangles;
 
-    node->objectsIndex = currNodeIndices.data();
-    node->numObjects = currNodeIndices.size();
+    node->objectsIndex = currNodeIndices->data();
+    node->numObjects = currNodeIndices->size();
     return node;
 }
 

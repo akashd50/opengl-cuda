@@ -33,11 +33,12 @@ BVHBinaryNode* allocateBVH(BVHBinaryNode* node) {
     BVHBinaryNode tempNode = BVHBinaryNode();
     tempNode.left = allocateBVH(node->left);
     tempNode.right = allocateBVH(node->right);
-
+    tempNode.bounds = cudaWrite<Bounds>(node->bounds, 1);
     if (node->numObjects != 0) {
         tempNode.objectsIndex = cudaWrite<int>(node->objectsIndex, node->numObjects);
         tempNode.numObjects = node->numObjects;
     }
+
 
     return cudaWrite<BVHBinaryNode>(&tempNode, 1);
 }
@@ -55,7 +56,7 @@ CudaRTObject* allocateCudaObjects(CudaRTObject* object) {
             CudaMesh tempMesh(cudaTrianglePtr);
             tempMesh.numTriangles = mesh->numTriangles;
             tempMesh.material = cudaWrite<CudaMaterial>(mesh->material, 1);
-            //tempMesh.bvhRoot = allocateBVH(mesh->bvhRoot);
+            tempMesh.bvhRoot = allocateBVH(mesh->bvhRoot);
 
             return cudaWrite<CudaMesh>(&tempMesh, 1);
         }

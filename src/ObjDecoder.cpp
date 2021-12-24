@@ -43,6 +43,7 @@ CudaMesh* ObjDecoder::createMesh(const std::string& file) {
     delete rawData.vertices;
     delete rawData.uvs;
     delete rawData.faceConfiguration;
+    mesh->finalize();
     return mesh;
 }
 
