@@ -3,13 +3,14 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <cuda_runtime.h>
+#include <string>
 #include "cuda_classes.h"
 
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------Helper--Functions-------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 #define check(ans) { _check((ans), __FILE__, __LINE__); }
-inline void _check(cudaError_t code, char *file, int line);
+inline void _check(cudaError_t code, std::string file, int line);
 
 //template <class T>
 //T* cudaWrite(T* data, int len);

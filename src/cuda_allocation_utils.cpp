@@ -1,7 +1,7 @@
 #include "headers/cuda_allocation_utils.h"
 
 #define check(ans) { _check((ans), __FILE__, __LINE__); }
-inline void _check(cudaError_t code, char *file, int line)
+inline void _check(cudaError_t code, std::string file, int line)
 {
     if (code != cudaSuccess) {
         fprintf(stderr,"CUDA Error: %s %s %d\n", cudaGetErrorString(code), file, line);

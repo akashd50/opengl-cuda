@@ -464,7 +464,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
-    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 1, false));
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 3, false));
 
     surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
 }

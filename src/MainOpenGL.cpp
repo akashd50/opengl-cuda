@@ -48,7 +48,7 @@ void MainOpenGL::init()
     cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));
     //scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
 
-    CudaMesh* mesh = ObjDecoder::createMesh("../resources/cylinder.obj");
+    CudaMesh* mesh = ObjDecoder::createMesh("../resources/monkey_i.obj");
     mesh->material = mat3;
     cudaScene->addObject(mesh);
 
