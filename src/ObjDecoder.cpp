@@ -7,6 +7,7 @@
 
 CudaMesh* ObjDecoder::createMesh(const std::string& file) {
     CudaMesh* mesh = CudaMesh::newHostMesh();
+    mesh->numTriangles = 0;
     BVHBinaryNode* root = mesh->bvhRoot;
     RawData rawData = readFile(file);
     for (int i = 0; i < rawData.faceConfiguration->size(); i++) {

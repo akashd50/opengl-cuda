@@ -73,7 +73,7 @@ public:
     void addTriangle(CudaTriangle _object) {
         hostTriangles->push_back(_object);
         triangles = hostTriangles->data();
-        numTriangles++;
+        numTriangles = hostTriangles->size();
     }
 
     void finalize() {
@@ -88,6 +88,7 @@ public:
         auto mesh = new CudaMesh();
         mesh->hostTriangles = new std::vector<CudaTriangle>();
         mesh->triangles = mesh->hostTriangles->data();
+        mesh->numTriangles = 0;
         mesh->bvhRoot = new BVHBinaryNode();
         return mesh;
     }
@@ -112,7 +113,7 @@ public:
     void addObject(CudaRTObject* _object) {
         hostObjects->push_back(_object);
         objects = hostObjects->data();
-        numObjects++;
+        numObjects = hostObjects->size();
     }
 
     static CudaScene* newHostScene() {

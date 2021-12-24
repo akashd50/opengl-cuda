@@ -382,8 +382,7 @@ __device__ float checkHitOnMesh(float3 eye, float3 ray, BVHBinaryNode* node, Cud
 //        printf("Main AABB Hit @ (%f)\n", t);
 //        printf("\n\n");
 //        print2DUtil(node, 0);
-//        printf("\n\n");
-//
+//        printf("\n\n")
 //    }
 //
 //    if (t != MAX_T) { // If node is hit
@@ -438,32 +437,32 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
         }
         else if (scene->objects[i]->type == MESH) {
             CudaMesh* mesh = (CudaMesh*)scene->objects[i];
-            float meshHit = checkHitOnMesh(eye, ray, mesh->bvhRoot, mesh, debug);
-            if (meshHit >= HIT_T_OFFSET && meshHit < hit.t) {
-                hit.object = mesh;
-                hit.t = meshHit;
-                hit.hitPoint = t_to_vec(eye, ray, meshHit);
-                hit.index = i;
-                if (debug) {
-                    printf("doHitTest @ index (%d) with t (%f)\n", i, meshHit);
-                }
-            }
+//            float meshHit = checkHitOnMesh(eye, ray, mesh->bvhRoot, mesh, debug);
+//            if (meshHit >= HIT_T_OFFSET && meshHit < hit.t) {
+//                hit.object = mesh;
+//                hit.t = meshHit;
+//                hit.hitPoint = t_to_vec(eye, ray, meshHit);
+//                hit.index = i;
+//                if (debug) {
+//                    printf("doHitTest @ index (%d) with t (%f)\n", i, meshHit);
+//                }
+//            }
 //            if (debug) {
 //                for (int k=0; k<mesh->numTriangles; k++) {
 //                    CudaTriangle tt = mesh->triangles[k];
 //                    printf("Index(%d); (%f, %f, %f)\n", k, tt.a.x, tt.b.x, tt.c.x);
 //                }
 //            }
-//            for (int j=0; j<mesh->numTriangles; j++) {
-//                CudaTriangle t = mesh->triangles[j];
-//                float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
-//                if (triangleHit >= HIT_T_OFFSET && triangleHit < hit.t) {
-//                    hit.object = mesh;
-//                    hit.t = triangleHit;
-//                    hit.hitPoint = t_to_vec(eye, ray, triangleHit);
-//                    hit.index = i;
-//                }
-//            }
+            for (int j=0; j<mesh->numTriangles; j++) {
+                CudaTriangle t = mesh->triangles[j];
+                float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
+                if (triangleHit >= HIT_T_OFFSET && triangleHit < hit.t) {
+                    hit.object = mesh;
+                    hit.t = triangleHit;
+                    hit.hitPoint = t_to_vec(eye, ray, triangleHit);
+                    hit.index = i;
+                }
+            }
         }
     }
     return hit;

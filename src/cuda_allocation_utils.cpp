@@ -55,7 +55,7 @@ CudaRTObject* allocateCudaObjects(CudaRTObject* object) {
             CudaMesh tempMesh(cudaTrianglePtr);
             tempMesh.numTriangles = mesh->numTriangles;
             tempMesh.material = cudaWrite<CudaMaterial>(mesh->material, 1);
-            tempMesh.bvhRoot = allocateBVH(mesh->bvhRoot);
+            //tempMesh.bvhRoot = allocateBVH(mesh->bvhRoot);
 
             return cudaWrite<CudaMesh>(&tempMesh, 1);
         }
