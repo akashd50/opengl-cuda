@@ -312,18 +312,11 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 eye, float3 ray, CudaMesh* mesh
                 curr = curr->left;
             } else {
                 curr = nullptr;
-                if (debug) {
-                    printf("Setting curr to null StackEmpty(%d)\n", stack->empty());
-                }
+                if (debug) { printf("Setting curr to null StackEmpty(%d)\n", stack->empty()); }
             }
         }
         else {
-            // otherwise, if the current node is null, pop an element from the stack,
-            // print it, and finally set the current node to its right child
-            if (debug) {
-                printf("Curr is null | Popping off of the stack | StackEmpty(%d)\n", stack->empty());
-            }
-
+            if (debug) { printf("Curr is null | Popping off of the stack | StackEmpty(%d)\n", stack->empty()); }
             curr = stack->top();
             stack->pop();
 
@@ -404,12 +397,6 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
                     printf("doHitTest @ index (%d) with t (%f)\n", i, meshHit.t);
                 }
             }
-//            if (debug) {
-//                for (int k=0; k<mesh->numTriangles; k++) {
-//                    CudaTriangle tt = mesh->triangles[k];
-//                    printf("Index(%d); (%f, %f, %f)\n", k, tt.a.x, tt.b.x, tt.c.x);
-//                }
-//            }
 //            for (int j=0; j<mesh->numTriangles; j++) {
 //                CudaTriangle t = mesh->triangles[j];
 //                float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
@@ -426,7 +413,7 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
     return hit;
 }
 
-__device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int bounceIndex, int maxBounces, bool debug) {
+__device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int maxBounces, bool debug) {
     Stack<HitInfo>* stack = (Stack<HitInfo>*)malloc(sizeof(Stack<HitInfo>));
     stack->init();
 
@@ -447,6 +434,7 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int b
         }
     }
 
+    // Sum all colors from stack
     float3 color = make_float3(0.0, 0.0, 0.0);
     if (stack->size() >= 2) {
         for (int i=0; i<stack->size() - 1; i++) {
@@ -465,30 +453,6 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int b
     free(stack);
 
     return color;
-
-//    if (bounceIndex >= maxBounces) {
-//        //printf("Bounce greater than 1 ; %d", bounceIndex);
-//        return make_float3(0, 0, 0);
-//    }
-//
-//    float3 color;
-//    HitInfo hitInfo = doHitTest(eye, ray, scene, debug);
-//    if (hitInfo.isHit()) {
-//        float3 reflectedRay = normalize(getReflectedRay(eye, ray, hitInfo.hitNormal));
-//        if (debug) {
-//            printf("HitInfo(%d); Hit T(%f) @ (%f, %f, %f) | Normal(%f, %f, %f) | Reflected(%f, %f, %f)\n",
-//                   hitInfo.index, hitInfo.t, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
-//                   hitInfo.hitNormal.x, hitInfo.hitNormal.y, hitInfo.hitNormal.z,
-//                   reflectedRay.x, reflectedRay.y, reflectedRay.z);
-//        }
-//        float3 reflectedRayColor = hitInfo.object->material->reflective * traceSingleRay(hitInfo.hitPoint, reflectedRay, scene,bounceIndex + 1, maxBounces, debug);
-//        color = hitInfo.object->material->diffuse + reflectedRayColor;
-//
-//    } else {
-//        color = make_float3(0, 0, 0);
-//    }
-
-    // return color;
 }
 
 __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
@@ -500,7 +464,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
-    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, 2, false));
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 1, false));
 
     surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
 }
@@ -510,7 +474,7 @@ __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, C
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
     printf("\n\nRay (%f, %f, %f)\n", ray.x, ray.y, ray.z);
-    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 0, 4, true));
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 4, true));
     printf("Final Color: (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
     surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
 }

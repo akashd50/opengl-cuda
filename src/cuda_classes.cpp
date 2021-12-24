@@ -105,6 +105,7 @@ BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangle
         int* localIndices = new int[len];
         for (int i=0; i<len; i++) { localIndices[i] = indices->at(i); }
         node->objectsIndex = localIndices;
+        node->numObjects = len;
         return node;
     }
 
