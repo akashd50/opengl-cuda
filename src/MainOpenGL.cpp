@@ -45,10 +45,10 @@ void MainOpenGL::init()
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.7, 0.3, 0.2));
     mat3->reflective = make_float3(0.4, 0.4, 0.4);
 
-    cudaScene->addObject(new CudaSphere(make_float3(2.0, 0.0, -7.0), 2.0, mat1));
+    cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));
     //scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
 
-    CudaMesh* mesh = ObjDecoder::createMesh("../resources/cylinder.obj");
+    CudaMesh* mesh = ObjDecoder::createMesh("../resources/cylinder_half.obj");
     mesh->material = mat3;
     cudaScene->addObject(mesh);
 

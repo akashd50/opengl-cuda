@@ -27,16 +27,17 @@ public:
     }
 };
 //----------------------------------------------------------------------------------------------------------------------
+template <class T>
 class Stack {
 public:
-    BVHBinaryNode** stack;
+    T* stack;
     int pointer;
     __device__ void init() {
-        stack = (BVHBinaryNode**)malloc(10 * sizeof(BVHBinaryNode*));
+        stack = (T*)malloc(15 * sizeof(T));
         pointer = 0;
     }
 
-    __device__ void push(BVHBinaryNode* val) {
+    __device__ void push(T val) {
         stack[pointer++] = val;
     }
 
@@ -44,7 +45,7 @@ public:
         pointer--;
     }
 
-    __device__ BVHBinaryNode* top() {
+    __device__ T top() {
         return stack[pointer - 1];
     }
 
@@ -52,8 +53,13 @@ public:
         return pointer == 0;
     }
 
+    __device__ int size() {
+        return pointer;
+    }
+
     __device__ void clean() {
         free(stack);
+        pointer = 0;
     }
 };
 //----------------------------------------------------------------------------------------------------------------------

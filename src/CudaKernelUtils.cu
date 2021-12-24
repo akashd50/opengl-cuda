@@ -275,25 +275,20 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 eye, float3 ray, CudaMesh* mesh
     if (debug) {
         printf("Starting to check hit on Mesh\n");
     }
-    Stack* stack = (Stack*)malloc(sizeof(Stack));
+    Stack<BVHBinaryNode*>* stack = (Stack<BVHBinaryNode*>*)malloc(sizeof(Stack<BVHBinaryNode*>));
     stack->init();
     HitInfo hitInfo;
-//    if (debug) {
-//        printf("Stack initialized\n");
-//    }
-//    hitInfo.t = checkHitOnAABB(eye, ray, mesh->bvhRoot->bounds, debug);
-//    if (hitInfo.t != MAX_T && hitInfo.t > 0) {
-//        stack->push(mesh->bvhRoot);
-//    } else {
-//        return MAX_T;
-//    }
+    if (debug) {
+        printf("Stack initialized\n");
+    }
+
     float minAABB = MAX_T;
     // start from the root node (set current node to the root node)
     BVHBinaryNode* curr = mesh->bvhRoot;
-//    if (debug) {
-//        printf("Curr set IsNull(%d)\n", curr == nullptr);
-//        printf("Stack Empty (%d)\n", stack->empty());
-//    }
+    if (debug) {
+        printf("Curr set IsNull(%d)\n", curr == nullptr);
+        printf("Stack Empty (%d)\n", stack->empty());
+    }
     // if the current node is null and the stack is also empty, we are done
     while (!stack->empty() || curr != nullptr)
     {
@@ -301,9 +296,9 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 eye, float3 ray, CudaMesh* mesh
         // and move to its left child
         if (curr != nullptr)
         {
-//            if (debug) {
-//                printf("Curr Bounds IsNull(%d)\n", curr->bounds == nullptr);
-//            }
+            if (debug) {
+                printf("Curr Bounds IsNull(%d)\n", curr->bounds == nullptr);
+            }
             float currT = checkHitOnAABB(eye, ray, curr->bounds, debug);
             if (debug) {
                 printf("AABB Checking curr CurrT(%f) MinT(%f)\n", currT, hitInfo.t);
@@ -321,23 +316,6 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 eye, float3 ray, CudaMesh* mesh
                     printf("Setting curr to null StackEmpty(%d)\n", stack->empty());
                 }
             }
-
-
-//            if (curr->left != nullptr) {
-//                float leftT = checkHitOnAABB(eye, ray, curr->left->bounds, debug);
-//                if (leftT != MAX_T && leftT <= hitInfo.t) {
-//                    if (debug) {
-//                        printf("Checking left LeftT(%f) MinT(%f)\n", leftT, hitInfo.t);
-//                    }
-//                    stack->push(curr->left);
-//                    curr = curr->left;
-//                } else {
-//                    // if not hitInfo
-//                    curr = nullptr;
-//                }
-//            } else {
-//                curr = nullptr;
-//            }
         }
         else {
             // otherwise, if the current node is null, pop an element from the stack,
@@ -350,23 +328,6 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 eye, float3 ray, CudaMesh* mesh
             stack->pop();
 
             curr = curr->right;
-
-//            if (curr->right != nullptr) {
-//                float rightT = checkHitOnAABB(eye, ray, curr->right->bounds, debug);
-//                if (rightT != MAX_T && rightT <= hitInfo.t) {
-//                    if (debug) {
-//                        printf("Checking right RightT(%f) MinT(%f)\n", rightT, hitInfo.t);
-//                        printf("Current->right NULL (%d)\n", curr->right == nullptr);
-//                    }
-//                    curr = curr->right;
-//                } else {
-//                    // if not hitInfo
-//                    curr = nullptr;
-//                }
-//            } else {
-//                // if not hitInfo
-//                curr = nullptr;
-//            }
         }
     }
 
@@ -374,63 +335,6 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 eye, float3 ray, CudaMesh* mesh
     free(stack);
     return hitInfo;
 }
-
-//__device__ float checkHitOnMeshHelper(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
-//
-//    float minT = checkHitOnNodeTriangles(eye, ray, node, mesh, debug);
-//
-//    if (node->left == nullptr || node->right == nullptr) {
-//        return minT;
-//    }
-//
-//    float leftT = checkHitOnAABB(eye, ray, node->left->bounds, debug);
-//    float rightT = checkHitOnAABB(eye, ray, node->right->bounds, debug);
-//
-//    if (debug) {
-//        printf("LeftT - AABB (%f, %f, %f, %f, %f, %f) ---- (%f)\n", node->left->bounds->top, node->left->bounds->bottom,
-//               node->left->bounds->left, node->left->bounds->right, node->left->bounds->front, node->left->bounds->back, leftT);
-//
-//        printf("RightT - AABB (%f, %f, %f, %f, %f, %f) ---- (%f)\n", node->right->bounds->top, node->right->bounds->bottom,
-//               node->right->bounds->left, node->right->bounds->right, node->right->bounds->front, node->right->bounds->back, rightT);
-//    }
-//
-//    if (leftT != MAX_T && leftT <= minT) {
-//        if (debug) {
-//            printf("Checking left LeftT(%f) MinT(%f)\n", leftT, minT);
-//        }
-//        float tempT = checkHitOnMeshHelper(eye, ray, node->left, mesh, debug);
-//        minT = min(tempT, minT);
-//    }
-//    if (rightT != MAX_T && rightT <= minT) {
-//        if (debug) {
-//            printf("Checking right RightT(%f) MinT(%f)\n", rightT, minT);
-//        }
-//        float tempT = checkHitOnMeshHelper(eye, ray, node->right, mesh, debug);
-//        minT = min(tempT, minT);
-//    }
-//
-//    if (debug) {
-//        printf("Returning MinT(%f)\n", minT);
-//    }
-//    return minT;
-//}
-//
-//__device__ float checkHitOnMesh(float3 eye, float3 ray, BVHBinaryNode* node, CudaMesh* mesh, bool debug) {
-////    float t = checkHitOnAABB(eye, ray, node->bounds, debug);
-////    if (debug) {
-////        printf("Main AABB Hit @ (%f)\n", t);
-////        printf("\n\n");
-////        print2DUtil(node, 0);
-////        printf("\n\n")
-////    }
-////
-////    if (t != MAX_T) { // If node is hit
-////        return checkHitOnMeshHelper(eye, ray, node, mesh, debug);
-////    } else {
-////        return MAX_T;
-////    }
-//    return checkHitOnMeshHelperNR(eye, ray, mesh, debug);
-//}
 
 __device__ float doTChecks(float newT, float oldT) {
     return newT > 0 && newT < oldT ? newT : oldT;
@@ -481,6 +385,11 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
         }
         else if (scene->objects[i]->type == MESH) {
             CudaMesh* mesh = (CudaMesh*)scene->objects[i];
+//            if (debug) {
+//                printf("doHitTest @ index (%d) Mesh Type(%d)\n", i, scene->objects[i]->type);
+//                printf("doHitTest @ index (%d) Mesh NumTriangles(%d)\n", i, mesh->numTriangles);
+//            }
+
             HitInfo meshHit = checkHitOnMeshHelperNR(eye, ray, mesh, debug);
             if (debug) {
                 printf("doHitTest @ index (%d) MeshHit.t (%f)\n", i, meshHit.t);
@@ -518,29 +427,68 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
 }
 
 __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int bounceIndex, int maxBounces, bool debug) {
-    if (bounceIndex >= maxBounces) {
-        //printf("Bounce greater than 1 ; %d", bounceIndex);
-        return make_float3(0, 0, 0);
-    }
+    Stack<HitInfo>* stack = (Stack<HitInfo>*)malloc(sizeof(Stack<HitInfo>));
+    stack->init();
 
-    float3 color;
-    HitInfo hitInfo = doHitTest(eye, ray, scene, debug);
-    if (hitInfo.isHit()) {
-        float3 reflectedRay = normalize(getReflectedRay(eye, ray, hitInfo.hitNormal));
-        if (debug) {
-            printf("HitInfo(%d); Hit T(%f) @ (%f, %f, %f) | Normal(%f, %f, %f) | Reflected(%f, %f, %f)\n",
-                   hitInfo.index, hitInfo.t, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
-                   hitInfo.hitNormal.x, hitInfo.hitNormal.y, hitInfo.hitNormal.z,
-                   reflectedRay.x, reflectedRay.y, reflectedRay.z);
+    float3 newRay = ray;
+    float3 newEye = eye;
+    for(int i=0; i<maxBounces; i++) {
+        HitInfo hitInfo = doHitTest(newEye, newRay, scene, debug);
+        if (hitInfo.isHit()) {
+            newRay = normalize(getReflectedRay(eye, ray, hitInfo.hitNormal));
+            newEye = hitInfo.hitPoint;
+            if (debug) {
+                printf("HitInfo(%d); Hit T(%f) @ (%f, %f, %f) | Normal(%f, %f, %f) | Reflected(%f, %f, %f)\n",
+                       hitInfo.index, hitInfo.t, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
+                       hitInfo.hitNormal.x, hitInfo.hitNormal.y, hitInfo.hitNormal.z,
+                       newRay.x, newRay.y, newRay.z);
+            }
+            stack->push(hitInfo);
         }
-        float3 reflectedRayColor = hitInfo.object->material->reflective * traceSingleRay(hitInfo.hitPoint, reflectedRay, scene,bounceIndex + 1, maxBounces, debug);
-        color = hitInfo.object->material->diffuse + reflectedRayColor;
-
-    } else {
-        color = make_float3(0, 0, 0);
     }
+
+    float3 color = make_float3(0.0, 0.0, 0.0);
+    if (stack->size() >= 2) {
+        for (int i=0; i<stack->size() - 1; i++) {
+            HitInfo curr = stack->top();
+            stack->pop();
+            HitInfo next = stack->top();
+            color = color + next.object->material->reflective * curr.object->material->diffuse;
+        }
+    }
+    if (stack->size() >= 1) {
+        HitInfo curr = stack->top(); stack->pop();
+        color = color + curr.object->material->diffuse;
+    }
+
+    stack->clean();
+    free(stack);
 
     return color;
+
+//    if (bounceIndex >= maxBounces) {
+//        //printf("Bounce greater than 1 ; %d", bounceIndex);
+//        return make_float3(0, 0, 0);
+//    }
+//
+//    float3 color;
+//    HitInfo hitInfo = doHitTest(eye, ray, scene, debug);
+//    if (hitInfo.isHit()) {
+//        float3 reflectedRay = normalize(getReflectedRay(eye, ray, hitInfo.hitNormal));
+//        if (debug) {
+//            printf("HitInfo(%d); Hit T(%f) @ (%f, %f, %f) | Normal(%f, %f, %f) | Reflected(%f, %f, %f)\n",
+//                   hitInfo.index, hitInfo.t, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
+//                   hitInfo.hitNormal.x, hitInfo.hitNormal.y, hitInfo.hitNormal.z,
+//                   reflectedRay.x, reflectedRay.y, reflectedRay.z);
+//        }
+//        float3 reflectedRayColor = hitInfo.object->material->reflective * traceSingleRay(hitInfo.hitPoint, reflectedRay, scene,bounceIndex + 1, maxBounces, debug);
+//        color = hitInfo.object->material->diffuse + reflectedRayColor;
+//
+//    } else {
+//        color = make_float3(0, 0, 0);
+//    }
+
+    // return color;
 }
 
 __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
