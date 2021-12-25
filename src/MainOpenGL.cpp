@@ -38,16 +38,13 @@ void MainOpenGL::init()
     quad->build(texture_shader);
 
     cudaScene = CudaScene::newHostScene();
-    auto skySphereMat = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.3, 0.8));
-    cudaScene->addObject(new CudaSphere(make_float3(0.0, 0.0, 0.0), 50.0, skySphereMat));
-    cudaScene->addLight(new CudaSkyboxLight(0));
+    cudaScene->addLight(new CudaSkyboxLight(new CudaSphere(make_float3(0.0, 0.0, 0.0), 50.0)));
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.5, 0.4));
     mat1->reflective = make_float3(0.4, 0.4, 0.4);
 
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.7, 0.3, 0.2));
     mat3->reflective = make_float3(0.1, 0.1, 0.1);
-
 
 
     cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));

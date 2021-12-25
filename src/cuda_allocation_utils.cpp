@@ -47,7 +47,11 @@ CudaRTObject* allocateCudaObject(CudaRTObject* object) {
     switch (object->type) {
         case SPHERE: {
             auto sphere = (CudaSphere*)object;
-            CudaSphere tempSphere(sphere->position, sphere->radius, cudaWrite<CudaMaterial>(sphere->material, 1));
+            CudaMaterial* matPtr = nullptr;
+            if (sphere->material != nullptr) {
+                matPtr = cudaWrite<CudaMaterial>(sphere->material, 1);
+            }
+            CudaSphere tempSphere(sphere->position, sphere->radius, matPtr);
             return cudaWrite<CudaSphere>(&tempSphere, 1);
         }
         case MESH: {
@@ -64,11 +68,12 @@ CudaRTObject* allocateCudaObject(CudaRTObject* object) {
     return nullptr;
 }
 
-CudaLight* allocateCudaLight(CudaLight* light) {
-    switch (light->type) {
+CudaRTObject* allocateCudaLight(CudaRTObject* light) {
+    switch (((CudaLight*)light)->lightType) {
         case SKYBOX_LIGHT: {
             auto skyboxLight = (CudaSkyboxLight*)light;
-            return cudaWrite<CudaSkyboxLight>(skyboxLight, 1);
+            CudaSkyboxLight tempLight((CudaSphere*)allocateCudaObject(skyboxLight->sphere));
+            return cudaWrite<CudaSkyboxLight>(&tempLight, 1);
         }
         case POINT_LIGHT: {
             return nullptr;
@@ -90,13 +95,13 @@ CudaRTObject** allocateCudaObjects(CudaScene* scene) {
     return cudaObjectsPtr;
 }
 
-CudaLight** allocateCudaLights(CudaScene* scene) {
+CudaRTObject** allocateCudaLights(CudaScene* scene) {
     int numLights = scene->numLights;
-    auto lights = new CudaLight*[numLights];
+    auto lights = new CudaRTObject*[numLights];
     for (int i=0; i < numLights; i++) {
         lights[i] = allocateCudaLight(scene->hostLights->at(i));
     }
-    auto cudaLightsPtr = cudaWrite<CudaLight*>(lights, numLights);
+    auto cudaLightsPtr = cudaWrite<CudaRTObject*>(lights, numLights);
     delete[] lights;
 
     return cudaLightsPtr;
@@ -104,7 +109,7 @@ CudaLight** allocateCudaLights(CudaScene* scene) {
 
 CudaScene* allocateCudaScene(CudaScene* scene) {
     CudaRTObject** cudaObjectsPtr = allocateCudaObjects(scene);
-    CudaLight** cudaLightsPtr = allocateCudaLights(scene);
+    CudaRTObject** cudaLightsPtr = allocateCudaLights(scene);
     CudaScene tempScene(cudaObjectsPtr, scene->numObjects, cudaLightsPtr, scene->numLights);
     return cudaWrite<CudaScene>(&tempScene, 1);
 }

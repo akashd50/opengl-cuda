@@ -69,9 +69,10 @@ CudaTriangle::CudaTriangle(float3 _a, float3 _b, float3 _c): a(_a), b(_b), c(_c)
 CudaTriangle::CudaTriangle(float3 _a, float3 _b, float3 _c, int _index): a(_a), b(_b), c(_c), index(_index) {}
 
 //----------------------------------------------------------------------------------------------------------------------
-
-CudaSphere::CudaSphere(float3 _position, float _radius, CudaMaterial* _material)
-                    : CudaRTObject(SPHERE, _material), position(_position), radius(_radius) {}
+CudaSphere::CudaSphere(float3 _position, float _radius): CudaRTObject(SPHERE, nullptr),
+position(_position), radius(_radius) {}
+CudaSphere::CudaSphere(float3 _position, float _radius, CudaMaterial* _material): CudaRTObject(SPHERE, _material),
+position(_position), radius(_radius) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -167,29 +168,29 @@ BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangle
 
 //----------------------------------------------------------------------------------------------------------------------
 
-CudaLight::CudaLight(int _type): type(_type) {}
-CudaLight::CudaLight(int _type, float3 _color): type(_type), color(_color) {}
+CudaLight::CudaLight(int _lightType): CudaRTObject(LIGHT), lightType(_lightType) {}
+CudaLight::CudaLight(int _lightType, float3 _color): CudaRTObject(LIGHT), lightType(_lightType) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
 CudaSkyboxLight::CudaSkyboxLight(): CudaLight(SKYBOX_LIGHT) {}
-CudaSkyboxLight::CudaSkyboxLight(int _sphereIndex): CudaLight(SKYBOX_LIGHT), sphereIndex(_sphereIndex) {}
+CudaSkyboxLight::CudaSkyboxLight(CudaSphere* _sphere): CudaLight(SKYBOX_LIGHT), sphere(_sphere) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
-CudaPointLight::CudaPointLight(float3 _position): CudaLight(POINT_LIGHT, make_float3(1.0, 1.0, 1.0)),
+CudaPointLight::CudaPointLight(float3 _position): CudaLight(POINT_LIGHT),
 position(_position) {}
-CudaPointLight::CudaPointLight(float3 _position, float3 _color): CudaLight(POINT_LIGHT, _color), position(_position) {}
+CudaPointLight::CudaPointLight(float3 _position, float3 _color): CudaLight(POINT_LIGHT), position(_position) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
-CudaMeshLight::CudaMeshLight(): CudaLight(MESH_LIGHT, make_float3(1.0, 1.0, 1.0)) {}
+CudaMeshLight::CudaMeshLight(): CudaLight(MESH_LIGHT) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
 CudaScene::CudaScene(): numObjects(0) {};
 CudaScene::CudaScene(CudaRTObject** _objects , int _numObjects): objects(_objects), numObjects(_numObjects) {}
-CudaScene::CudaScene(CudaRTObject** _objects , int _numObjects, CudaLight** _lights , int _numLights)
+CudaScene::CudaScene(CudaRTObject** _objects , int _numObjects, CudaRTObject** _lights , int _numLights)
 : objects(_objects), numObjects(_numObjects), lights(_lights), numLights(_numLights) {};
 
 void CudaScene::addObject(CudaRTObject* _object) {
@@ -198,7 +199,7 @@ void CudaScene::addObject(CudaRTObject* _object) {
     numObjects = hostObjects->size();
 }
 
-void CudaScene::addLight(CudaLight* _light) {
+void CudaScene::addLight(CudaRTObject* _light) {
     hostLights->push_back(_light);
     lights = hostLights->data();
     numLights = hostLights->size();
@@ -209,7 +210,7 @@ CudaScene* CudaScene::newHostScene() {
     scene->hostObjects = new std::vector<CudaRTObject*>();
     scene->objects = scene->hostObjects->data();
 
-    scene->hostLights = new std::vector<CudaLight*>();
+    scene->hostLights = new std::vector<CudaRTObject*>();
     scene->lights = scene->hostLights->data();
     scene->numObjects = 0;
     scene->numLights = 0;

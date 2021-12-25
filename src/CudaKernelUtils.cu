@@ -166,7 +166,7 @@ __device__ void print2DUtil(BVHBinaryNode *root, int space)
     print2DUtil(root->left, space);
 }
 
-__device__ __host__ void swap(float &a, float &b) {
+__device__ void swap(float &a, float &b) {
     float t = a;
     a = b;
     b = t;
@@ -204,7 +204,7 @@ __device__ __host__ void swap(float &a, float &b) {
         tmax = tzmax;
  */
 
-__device__ __host__ MinMaxT checkHitOnAABB(float3 e, float3 d, Bounds* bounds, bool debug) {
+__device__ MinMaxT checkHitOnAABB(float3 e, float3 d, Bounds* bounds, bool debug) {
     if (bounds == nullptr) return {MIN_T, MAX_T};
 
     float tmin = (bounds->left - e.x) / d.x;
@@ -362,6 +362,11 @@ __device__ float check_hit_on_sphere(float3 eye, float3 ray, CudaSphere* sphere,
     return MAX_T;
 }
 
+__device__ float3 ray_color(const float3& r) {
+    float t = 0.5f * (r.y + 1.0f);
+    return (1.0f - t) * make_float3(0.5, 0.7, 1.0) + t * make_float3(1.0, 1.0, 1.0);
+}
+
 __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debug) {
     HitInfo hit;
     for (int i=0; i<scene->numObjects; i++) {
@@ -407,12 +412,26 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
 //            }
         }
     }
-    return hit;
-}
 
-__device__ float3 ray_color(const float3& r) {
-    auto t = 0.5 * (r.y + 1.0);
-    return (1.0 - t) * make_float3(1.0, 1.0, 1.0) + t * make_float3(0.5, 0.7, 1.0);
+    for (int i=0; i<scene->numLights; i++) {
+        auto light = (CudaLight*)scene->lights[i];
+        if (light->lightType == SKYBOX_LIGHT) {
+            auto sphere = ((CudaSkyboxLight*)scene->lights[i])->sphere;
+            float sphereHit = check_hit_on_sphere(eye, ray, sphere, debug);
+            if (sphereHit >= HIT_T_OFFSET && sphereHit < hit.t) {
+                hit.object = scene->lights[i];
+                hit.t = sphereHit;
+                hit.hitPoint = t_to_vec(eye, ray, sphereHit);
+                hit.hitNormal = getSphereNormal(hit.hitPoint, sphere);
+                hit.color = ray_color(ray);
+                hit.index = i;
+                if (debug) {
+                    printf("doHitTest @ index (%d) with t (%f)\n", i, sphereHit);
+                }
+            }
+        }
+    }
+    return hit;
 }
 
 __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int maxBounces, bool debug) {
@@ -426,10 +445,9 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int m
     while(bounceIndex < maxBounces && isHit) {
         HitInfo hitInfo = doHitTest(newEye, newRay, scene, debug);
         if (hitInfo.isHit()) {
-            if (hitInfo.index == 0) {
+            if (hitInfo.object->type >= LIGHT) {
                 // skybox obj
                 isHit = false;
-                hitInfo.color = ray_color(newRay);
             }
             stack->push(hitInfo);
 
@@ -450,17 +468,22 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int m
     // Sum all colors from stack
     float3 color = make_float3(0.0, 0.0, 0.0);
     if (stack->size() >= 2) {
-        color = stack->top().object->material->diffuse;
-        for (int i=0; i<stack->size(); i++) {
-            HitInfo curr = stack->top();
-            stack->pop();
+        color = stack->top().color;
+        stack->pop();
+        while(!stack->empty()) {
+            //HitInfo curr = stack->top();
             HitInfo next = stack->top();
+            stack->pop();
 //            if (debug) {
 //                printf("\n\nCurr | Index(%d)\n", curr.index);
 //                printf("Next | Index(%d)\n", next.index);
 //                printf("Color(%f, %f, %f)\n", color.x, color.y, color.z);
 //            }
-            color = next.color + next.object->material->reflective * color;
+            if (next.object->type < LIGHT) {
+                color = next.color + (next.object->material->reflective * color);
+            } else {
+                color = next.color;
+            }
         }
     } else if (stack->size() == 1) {
         HitInfo curr = stack->top(); stack->pop();
@@ -482,7 +505,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, 512, 512) - eye;
-    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 2, false));
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, 4, false));
 
     surf2Dwrite(color, image, x * sizeof(color), 512-y, cudaBoundaryModeClamp);
 }

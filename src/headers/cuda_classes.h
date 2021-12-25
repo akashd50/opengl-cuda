@@ -70,28 +70,26 @@ class CudaSphere: public CudaRTObject {
 public:
     float3 position;
     float radius;
-
+    CudaSphere(float3 _position, float _radius);
     CudaSphere(float3 _position, float _radius, CudaMaterial *_material);
 };
 //----------------------------------------------------------------------------------------------------------------------
 
-class CudaLight {
+class CudaLight: public CudaRTObject {
 public:
-    int type;
-    float3 color;
-
-    CudaLight(int _type);
-    CudaLight(int _type, float3 _color);
+    int lightType;
+    CudaLight(int _lightType);
+    CudaLight(int _lightType, float3 _color);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
 
 class CudaSkyboxLight: public CudaLight {
 public:
-    int sphereIndex; // Index of the sphere used for ray-hit detection
+    CudaSphere* sphere; // sphere used for ray-hit detection
 
     CudaSkyboxLight();
-    CudaSkyboxLight(int _sphereIndex);
+    CudaSkyboxLight(CudaSphere* _sphere);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -115,16 +113,16 @@ public:
 class CudaScene {
 public:
     std::vector<CudaRTObject*>* hostObjects;
-    std::vector<CudaLight*>* hostLights;
+    std::vector<CudaRTObject*>* hostLights;
     CudaRTObject** objects;
-    CudaLight** lights;
+    CudaRTObject** lights;
     int numObjects, numLights;
 
     CudaScene();
     CudaScene(CudaRTObject** _objects , int _numObjects);
-    CudaScene(CudaRTObject** _objects , int _numObjects, CudaLight** _lights , int _numLights);
+    CudaScene(CudaRTObject** _objects , int _numObjects, CudaRTObject** _lights , int _numLights);
     void addObject(CudaRTObject* _object);
-    void addLight(CudaLight* _light);
+    void addLight(CudaRTObject* _light);
     static CudaScene* newHostScene();
 };
 
