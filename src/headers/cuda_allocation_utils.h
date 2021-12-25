@@ -10,7 +10,7 @@
 //----------------------------------------------Helper--Functions-------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
 #define check(ans) { _check((ans), __FILE__, __LINE__); }
-inline void _check(cudaError_t code, std::string file, int line);
+inline void _check(cudaError_t code, const std::string& file, int line);
 
 //template <class T>
 //T* cudaWrite(T* data, int len);

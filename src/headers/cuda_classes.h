@@ -7,6 +7,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------CUDA--OBJECTS-----------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
+
 float3 vec3ToFloat3(glm::vec3 vec);
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -72,18 +73,58 @@ public:
 
     CudaSphere(float3 _position, float _radius, CudaMaterial *_material);
 };
+//----------------------------------------------------------------------------------------------------------------------
+
+class CudaLight {
+public:
+    int type;
+    float3 color;
+
+    CudaLight(int _type);
+    CudaLight(int _type, float3 _color);
+};
 
 //----------------------------------------------------------------------------------------------------------------------
 
+class CudaSkyboxLight: public CudaLight {
+public:
+    int sphereIndex; // Index of the sphere used for ray-hit detection
+
+    CudaSkyboxLight();
+    CudaSkyboxLight(int _sphereIndex);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+
+class CudaPointLight: public CudaLight {
+public:
+    float3 position;
+    CudaPointLight(float3 _position);
+    CudaPointLight(float3 _position, float3 _color);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+
+
+class CudaMeshLight: public CudaLight {
+public:
+    CudaMeshLight();
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 class CudaScene {
 public:
     std::vector<CudaRTObject*>* hostObjects;
+    std::vector<CudaLight*>* hostLights;
     CudaRTObject** objects;
-    int numObjects;
+    CudaLight** lights;
+    int numObjects, numLights;
 
     CudaScene();
     CudaScene(CudaRTObject** _objects , int _numObjects);
+    CudaScene(CudaRTObject** _objects , int _numObjects, CudaLight** _lights , int _numLights);
     void addObject(CudaRTObject* _object);
+    void addLight(CudaLight* _light);
     static CudaScene* newHostScene();
 };
 

@@ -1,11 +1,9 @@
 #pragma once
 #include <iostream>
-#include "glm/glm.hpp"
 #include "headers/CudaKernelUtils.cuh"
 #include <cuda.h>
 #include <cuda_gl_interop.h>
 #include <vector_functions.h>
-#include <math_functions.h>
 
 //----------OPERATORS---------------------------------------------------------------------------------------------------
 
@@ -375,8 +373,8 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
                 hit.t = sphereHit;
                 hit.hitPoint = t_to_vec(eye, ray, sphereHit);
                 hit.hitNormal = getSphereNormal(hit.hitPoint, sphere);
+                hit.color = sphere->material->diffuse;
                 hit.index = i;
-
                 if (debug) {
                     printf("doHitTest @ index (%d) with t (%f)\n", i, sphereHit);
                 }
@@ -390,6 +388,7 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
                 hit.t = meshHit.t;
                 hit.hitPoint = t_to_vec(eye, ray, meshHit.t);
                 hit.hitNormal = meshHit.hitNormal;
+                hit.color = mesh->material->diffuse;
                 hit.index = i;
                 if (debug) {
                     printf("doHitTest @ index (%d) with t (%f)\n", i, meshHit.t);
@@ -411,6 +410,11 @@ __device__ HitInfo doHitTest(float3 eye, float3 ray, CudaScene* scene, bool debu
     return hit;
 }
 
+__device__ float3 ray_color(const float3& r) {
+    auto t = 0.5 * (r.y + 1.0);
+    return (1.0 - t) * make_float3(1.0, 1.0, 1.0) + t * make_float3(0.5, 0.7, 1.0);
+}
+
 __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int maxBounces, bool debug) {
     auto stack = (Stack<HitInfo>*)malloc(sizeof(Stack<HitInfo>));
     stack->init();
@@ -422,6 +426,13 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int m
     while(bounceIndex < maxBounces && isHit) {
         HitInfo hitInfo = doHitTest(newEye, newRay, scene, debug);
         if (hitInfo.isHit()) {
+            if (hitInfo.index == 0) {
+                // skybox obj
+                isHit = false;
+                hitInfo.color = ray_color(newRay);
+            }
+            stack->push(hitInfo);
+
             newRay = normalize(getReflectedRay(eye, ray, hitInfo.hitNormal));
             newEye = hitInfo.hitPoint /*+ (0.01 * newRay)*/;
             if (debug) {
@@ -430,7 +441,6 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int m
                        hitInfo.hitNormal.x, hitInfo.hitNormal.y, hitInfo.hitNormal.z,
                        newRay.x, newRay.y, newRay.z);
             }
-            stack->push(hitInfo);
         } else {
             isHit = false;
         }
@@ -450,11 +460,11 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int m
 //                printf("Next | Index(%d)\n", next.index);
 //                printf("Color(%f, %f, %f)\n", color.x, color.y, color.z);
 //            }
-            color = next.object->material->diffuse + next.object->material->reflective * color;
+            color = next.color + next.object->material->reflective * color;
         }
     } else if (stack->size() == 1) {
         HitInfo curr = stack->top(); stack->pop();
-        color = color + curr.object->material->diffuse;
+        color = color + curr.color;
     }
 
     stack->clean();

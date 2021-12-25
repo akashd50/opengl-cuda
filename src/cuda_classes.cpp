@@ -167,8 +167,30 @@ BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangle
 
 //----------------------------------------------------------------------------------------------------------------------
 
+CudaLight::CudaLight(int _type): type(_type) {}
+CudaLight::CudaLight(int _type, float3 _color): type(_type), color(_color) {}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+CudaSkyboxLight::CudaSkyboxLight(): CudaLight(SKYBOX_LIGHT) {}
+CudaSkyboxLight::CudaSkyboxLight(int _sphereIndex): CudaLight(SKYBOX_LIGHT), sphereIndex(_sphereIndex) {}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+CudaPointLight::CudaPointLight(float3 _position): CudaLight(POINT_LIGHT, make_float3(1.0, 1.0, 1.0)),
+position(_position) {}
+CudaPointLight::CudaPointLight(float3 _position, float3 _color): CudaLight(POINT_LIGHT, _color), position(_position) {}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+CudaMeshLight::CudaMeshLight(): CudaLight(MESH_LIGHT, make_float3(1.0, 1.0, 1.0)) {}
+
+//----------------------------------------------------------------------------------------------------------------------
+
 CudaScene::CudaScene(): numObjects(0) {};
 CudaScene::CudaScene(CudaRTObject** _objects , int _numObjects): objects(_objects), numObjects(_numObjects) {}
+CudaScene::CudaScene(CudaRTObject** _objects , int _numObjects, CudaLight** _lights , int _numLights)
+: objects(_objects), numObjects(_numObjects), lights(_lights), numLights(_numLights) {};
 
 void CudaScene::addObject(CudaRTObject* _object) {
     hostObjects->push_back(_object);
@@ -176,10 +198,21 @@ void CudaScene::addObject(CudaRTObject* _object) {
     numObjects = hostObjects->size();
 }
 
+void CudaScene::addLight(CudaLight* _light) {
+    hostLights->push_back(_light);
+    lights = hostLights->data();
+    numLights = hostLights->size();
+}
+
 CudaScene* CudaScene::newHostScene() {
     auto scene = new CudaScene();
     scene->hostObjects = new std::vector<CudaRTObject*>();
     scene->objects = scene->hostObjects->data();
+
+    scene->hostLights = new std::vector<CudaLight*>();
+    scene->lights = scene->hostLights->data();
+    scene->numObjects = 0;
+    scene->numLights = 0;
     return scene;
 }
 

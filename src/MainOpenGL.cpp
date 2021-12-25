@@ -38,6 +38,9 @@ void MainOpenGL::init()
     quad->build(texture_shader);
 
     cudaScene = CudaScene::newHostScene();
+    auto skySphereMat = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.3, 0.8));
+    cudaScene->addObject(new CudaSphere(make_float3(0.0, 0.0, 0.0), 50.0, skySphereMat));
+    cudaScene->addLight(new CudaSkyboxLight(0));
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.5, 0.4));
     mat1->reflective = make_float3(0.4, 0.4, 0.4);
@@ -45,8 +48,9 @@ void MainOpenGL::init()
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.7, 0.3, 0.2));
     mat3->reflective = make_float3(0.1, 0.1, 0.1);
 
+
+
     cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));
-    //scene->addObject(new Sphere(mat2,0.5, glm::vec3(-1.0, 0.0, -4.0)));
 
     CudaMesh* mesh = ObjDecoder::createMesh("../resources/monkey_i.obj");
     mesh->material = mat3;

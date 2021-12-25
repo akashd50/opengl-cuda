@@ -1,10 +1,10 @@
 #include "headers/cuda_allocation_utils.h"
 
 #define check(ans) { _check((ans), __FILE__, __LINE__); }
-inline void _check(cudaError_t code, std::string file, int line)
+inline void _check(cudaError_t code, const std::string& file, int line)
 {
     if (code != cudaSuccess) {
-        fprintf(stderr,"CUDA Error: %s %s %d\n", cudaGetErrorString(code), file, line);
+        fprintf(stderr,"CUDA Error: %s %s %d\n", cudaGetErrorString(code), file.c_str(), line);
         exit(code);
     }
 }
@@ -43,7 +43,7 @@ BVHBinaryNode* allocateBVH(BVHBinaryNode* node) {
     return cudaWrite<BVHBinaryNode>(&tempNode, 1);
 }
 
-CudaRTObject* allocateCudaObjects(CudaRTObject* object) {
+CudaRTObject* allocateCudaObject(CudaRTObject* object) {
     switch (object->type) {
         case SPHERE: {
             auto sphere = (CudaSphere*)object;
@@ -64,17 +64,48 @@ CudaRTObject* allocateCudaObjects(CudaRTObject* object) {
     return nullptr;
 }
 
-CudaScene* allocateCudaScene(CudaScene* scene) {
+CudaLight* allocateCudaLight(CudaLight* light) {
+    switch (light->type) {
+        case SKYBOX_LIGHT: {
+            auto skyboxLight = (CudaSkyboxLight*)light;
+            return cudaWrite<CudaSkyboxLight>(skyboxLight, 1);
+        }
+        case POINT_LIGHT: {
+            return nullptr;
+        }
+    }
+    return nullptr;
+}
+
+CudaRTObject** allocateCudaObjects(CudaScene* scene) {
     int numObjects = scene->numObjects;
     auto objects = new CudaRTObject*[numObjects];
     for (int i=0; i<numObjects; i++) {
-        CudaRTObject* cudaPtr = allocateCudaObjects(scene->objects[i]);
+        CudaRTObject* cudaPtr = allocateCudaObject(scene->objects[i]);
         objects[i] = cudaPtr;
     }
-    CudaRTObject** cudaObjectsPtr = cudaWrite<CudaRTObject *>(objects, numObjects);
+    auto cudaObjectsPtr = cudaWrite<CudaRTObject *>(objects, numObjects);
     delete[] objects;
 
-    CudaScene tempScene(cudaObjectsPtr, numObjects);
+    return cudaObjectsPtr;
+}
+
+CudaLight** allocateCudaLights(CudaScene* scene) {
+    int numLights = scene->numLights;
+    auto lights = new CudaLight*[numLights];
+    for (int i=0; i < numLights; i++) {
+        lights[i] = allocateCudaLight(scene->hostLights->at(i));
+    }
+    auto cudaLightsPtr = cudaWrite<CudaLight*>(lights, numLights);
+    delete[] lights;
+
+    return cudaLightsPtr;
+}
+
+CudaScene* allocateCudaScene(CudaScene* scene) {
+    CudaRTObject** cudaObjectsPtr = allocateCudaObjects(scene);
+    CudaLight** cudaLightsPtr = allocateCudaLights(scene);
+    CudaScene tempScene(cudaObjectsPtr, scene->numObjects, cudaLightsPtr, scene->numLights);
     return cudaWrite<CudaScene>(&tempScene, 1);
 }
 

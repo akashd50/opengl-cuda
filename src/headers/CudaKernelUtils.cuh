@@ -24,7 +24,7 @@ class HitInfo {
 public:
     CudaRTObject* object;
     float t;
-    float3 hitPoint, hitNormal;
+    float3 hitPoint, hitNormal, color;
     int index;
     __device__ HitInfo(): t(MAX_T) {}
     __device__ HitInfo(CudaRTObject* _object, float _t) : object(_object), t(_t) {}
