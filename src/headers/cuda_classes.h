@@ -110,13 +110,23 @@ public:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+
+class CudaRandomGenerator {
+public:
+    float* randomNumbers;
+    int index, numRand;
+    CudaRandomGenerator() {}
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 class CudaScene {
 public:
     std::vector<CudaRTObject*>* hostObjects;
     std::vector<CudaRTObject*>* hostLights;
     CudaRTObject** objects;
     CudaRTObject** lights;
-    int numObjects, numLights;
+    int numObjects, numLights, width, height;
+    CudaRandomGenerator* generator;
 
     CudaScene();
     CudaScene(CudaRTObject** _objects , int _numObjects);

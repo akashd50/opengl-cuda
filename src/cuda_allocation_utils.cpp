@@ -44,13 +44,14 @@ BVHBinaryNode* allocateBVH(BVHBinaryNode* node) {
 }
 
 CudaRTObject* allocateCudaObject(CudaRTObject* object) {
+    CudaMaterial* matPtr = nullptr;
+    if (object->material != nullptr) {
+        matPtr = cudaWrite<CudaMaterial>(object->material, 1);
+    }
+
     switch (object->type) {
         case SPHERE: {
             auto sphere = (CudaSphere*)object;
-            CudaMaterial* matPtr = nullptr;
-            if (sphere->material != nullptr) {
-                matPtr = cudaWrite<CudaMaterial>(sphere->material, 1);
-            }
             CudaSphere tempSphere(sphere->position, sphere->radius, matPtr);
             return cudaWrite<CudaSphere>(&tempSphere, 1);
         }
@@ -59,7 +60,7 @@ CudaRTObject* allocateCudaObject(CudaRTObject* object) {
             auto cudaTrianglePtr = cudaWrite<CudaTriangle>(mesh->triangles, mesh->numTriangles);
             CudaMesh tempMesh(cudaTrianglePtr);
             tempMesh.numTriangles = mesh->numTriangles;
-            tempMesh.material = cudaWrite<CudaMaterial>(mesh->material, 1);
+            tempMesh.material = matPtr;
             tempMesh.bvhRoot = allocateBVH(mesh->bvhRoot);
 
             return cudaWrite<CudaMesh>(&tempMesh, 1);
@@ -107,10 +108,26 @@ CudaRTObject** allocateCudaLights(CudaScene* scene) {
     return cudaLightsPtr;
 }
 
+CudaRandomGenerator* allocateRandomGenerator(int num) {
+    CudaRandomGenerator tempGenerator;
+    auto numbers = new float[num];
+    for(int i=0; i<num; i++) {
+        numbers[i] = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+    }
+    tempGenerator.randomNumbers = cudaWrite<float>(numbers, num);
+    tempGenerator.numRand = num;
+    tempGenerator.index = 0;
+    delete[] numbers;
+    return cudaWrite<CudaRandomGenerator>(&tempGenerator, 1);
+}
+
 CudaScene* allocateCudaScene(CudaScene* scene) {
     CudaRTObject** cudaObjectsPtr = allocateCudaObjects(scene);
     CudaRTObject** cudaLightsPtr = allocateCudaLights(scene);
     CudaScene tempScene(cudaObjectsPtr, scene->numObjects, cudaLightsPtr, scene->numLights);
+    tempScene.width = scene->width;
+    tempScene.height = scene->height;
+    tempScene.generator = allocateRandomGenerator(scene->width);
     return cudaWrite<CudaScene>(&tempScene, 1);
 }
 

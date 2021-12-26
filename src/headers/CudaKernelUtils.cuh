@@ -77,7 +77,7 @@ public:
     CudaKernelUtils();
     ~CudaKernelUtils();
     void initializeRenderSurface(Texture* texture);
-    void renderScene(CudaScene* cudaScene);
+    void renderScene(CudaScene* cudaScene, int h, int w);
     void onClick(int x, int y, CudaScene* cudaScene);
     void deviceInformation();
 };
