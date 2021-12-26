@@ -117,7 +117,8 @@ CudaRandomGenerator* allocateRandomGenerator(int num) {
     CudaRandomGenerator tempGenerator;
     auto numbers = new float[num];
     for(int i=0; i<num; i++) {
-        numbers[i] = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+        float n = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+        numbers[i] = (n * 2.0f) - 1.0f;
     }
     tempGenerator.randomNumbers = cudaWrite<float>(numbers, num);
     tempGenerator.numRand = num;

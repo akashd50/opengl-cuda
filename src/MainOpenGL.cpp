@@ -17,12 +17,16 @@ Shader* single_color_shader, *texture_shader;
 //Framebuffer* default_framebuffer;
 Texture* test_texture;
 // ---------------------------------------------------------------------------------------------------------------------
+int currRowIndex, currColumnIndex;
 
 // ---------------------------------------------------------------------------------------------------------------------
 const char* MainOpenGL::WINDOW_TITLE = "Raytracing with Cuda";
 const double MainOpenGL::FRAME_RATE_MS = 1000.0 / 60.0;
-int MainOpenGL::WIDTH = 512;
-int MainOpenGL::HEIGHT = 512;
+const int RENDER_BLOCK_SIZE = 32;
+const int MAX_RENDER_THREADS_SIZE = 512;
+
+int MainOpenGL::WIDTH = 768;
+int MainOpenGL::HEIGHT = 768;
 // ---------------------------------------------------------------------------------------------------------------------
 void MainOpenGL::init()
 {
@@ -45,17 +49,19 @@ void MainOpenGL::init()
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.5, 0.4));
     mat1->reflective = make_float3(0.2, 0.2, 0.2);
+    mat1->roughness = 1.0f;
 
     auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.2, 0.6));
-    mat2->reflective = make_float3(0.2, 0.2, 0.2);
+    mat2->reflective = make_float3(0.6, 0.6, 0.6);
+    mat2->roughness = 0.5f;
 
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.2, 0.6));
     mat3->reflective = make_float3(0.2, 0.2, 0.2);
-
+    mat3->roughness = 1.0f;
 
     cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));
 
-    CudaMesh* mesh = ObjDecoder::createMesh("../resources/monkey_i.obj");
+    CudaMesh* mesh = ObjDecoder::createMesh("../resources/monkey_mid.obj");
     mesh->material = mat3;
     cudaScene->addObject(mesh);
 
@@ -68,7 +74,10 @@ void MainOpenGL::init()
     cudaUtils = new CudaKernelUtils();
     cudaUtils->deviceInformation();
     cudaUtils->initializeRenderSurface(test_texture);
-    cudaUtils->renderScene(allocatedScene, cudaScene->height, cudaScene->width);
+    //cudaUtils->renderScene(allocatedScene, 512, cudaScene->width, 0);
+
+    currRowIndex = 0;
+    currColumnIndex = 0;
 
     std::cout << "Size of int: " << sizeof(int) << std::endl;
     std::cout << "Size of pointer: " << sizeof(CudaMaterial*) << std::endl;
@@ -89,6 +98,17 @@ void MainOpenGL::display(void)
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(1.0, 0.5, 0.5, 1.0);
+
+    if (currRowIndex < cudaScene->height) {
+        if (currColumnIndex < cudaScene->width) {
+            int numThreadsToRun = std::min(cudaScene->width - currColumnIndex, MAX_RENDER_THREADS_SIZE);
+            cudaUtils->renderScene(allocatedScene, RENDER_BLOCK_SIZE, numThreadsToRun, currRowIndex, currColumnIndex);
+            currColumnIndex += MAX_RENDER_THREADS_SIZE;
+        } else {
+            currColumnIndex = 0;
+            currRowIndex += RENDER_BLOCK_SIZE;
+        }
+    }
 
     quad->getShader()->useProgram();
     quad->applyTransformations();
