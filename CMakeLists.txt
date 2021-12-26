@@ -10,6 +10,7 @@ project(Main LANGUAGES CUDA CXX C)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_FLAGS "-lineinfo")
 
 file(GLOB SRC_FILES "src/*.cpp")
 add_executable(Main ${SRC_FILES} src/CudaKernelUtils.cu)

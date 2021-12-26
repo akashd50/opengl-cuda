@@ -59,7 +59,7 @@ CudaMaterial::CudaMaterial(float3 _ambient, float3 _diffuse, float3 _specular, f
         reflective(_reflective), transmissive(_transmissive), refraction(_refraction), roughness(_roughness) {}
 
 //----------------------------------------------------------------------------------------------------------------------
-
+CudaRTObject::CudaRTObject() {}
 CudaRTObject::CudaRTObject(int _type) : type(_type) {}
 CudaRTObject::CudaRTObject(int _type, CudaMaterial* _material) : type(_type), material(_material) {}
 
@@ -168,6 +168,7 @@ BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangle
 
 //----------------------------------------------------------------------------------------------------------------------
 
+CudaLight::CudaLight(): CudaRTObject() {}
 CudaLight::CudaLight(int _lightType): CudaRTObject(LIGHT), lightType(_lightType) {}
 CudaLight::CudaLight(int _lightType, float3 _color): CudaRTObject(LIGHT), lightType(_lightType) {}
 

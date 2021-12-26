@@ -18,4 +18,4 @@ inline void _check(cudaError_t code, const std::string& file, int line);
 //T* cudaRead(T* data, int len);
 
 CudaScene* allocateCudaScene(CudaScene* scene);
-void cleanCudaScene(CudaScene* scene);
+void cleanCudaScene(CudaScene* allocatedScene);

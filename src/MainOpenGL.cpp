@@ -73,7 +73,11 @@ void MainOpenGL::init()
     std::cout << "Size of int: " << sizeof(int) << std::endl;
     std::cout << "Size of pointer: " << sizeof(CudaMaterial*) << std::endl;
     std::cout << "Size of Sphere: " << sizeof(CudaSphere) << std::endl;
+    std::cout << "Size of float3: " << sizeof(float3) << std::endl;
+    std::cout << "Size of float: " << sizeof(float) << std::endl;
     std::cout << "Size of CudaRTObject: " << sizeof(CudaRTObject) << std::endl;
+
+    std::cout << "Size of Sphere + RTObject: " << sizeof(CudaSphere) + sizeof(CudaRTObject) << std::endl;
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(1.0, 1.0, 1.0, 1.0);
@@ -100,6 +104,7 @@ void MainOpenGL::keyboard(unsigned char key, int x, int y)
     switch (key) {
     case 033: // Escape Key
     case 'q': case 'Q':
+        cleanCudaScene(allocatedScene);
         exit(EXIT_SUCCESS);
         break;
     }

@@ -38,12 +38,16 @@ class Stack {
 public:
     T* stack;
     int pointer;
-    __device__ void init() {
+    __device__ bool init() {
         stack = (T*)malloc(15 * sizeof(T));
         pointer = 0;
+        return stack != NULL;
     }
 
     __device__ void push(T val) {
+        if (pointer >= 15) {
+            printf("Stack full\n");
+        }
         stack[pointer++] = val;
     }
 

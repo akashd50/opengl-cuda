@@ -277,9 +277,10 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 &eye, float3 &ray, CudaMesh* me
     if (debug) {
         printf("Starting to check hit on Mesh\n");
     }
-    auto stack = (Stack<BVHBinaryNode*>*)malloc(sizeof(Stack<BVHBinaryNode*>));
-    stack->init();
     HitInfo hitInfo;
+
+    auto stack = (Stack<BVHBinaryNode*>*)malloc(sizeof(Stack<BVHBinaryNode*>));
+    if (!stack->init()) return hitInfo;
 //    if (debug) {
 //        printf("Stack initialized\n");
 //    }
@@ -482,7 +483,7 @@ __device__ float3 calculateLighting(HitInfo &hitInfo, CudaScene* scene, int &ran
     return lighting;
 }
 
-__device__ float3 traceSingleRay(float3 &eye, float3 &ray, CudaScene* scene, int maxBounces, int &randIndex, bool debug) {
+__device__ float3 traceSingleRay(float3 eye, float3 ray, CudaScene* scene, int maxBounces, int &randIndex, bool debug) {
     auto stack = (Stack<HitInfo>*)malloc(sizeof(Stack<HitInfo>));
     stack->init();
 
@@ -547,8 +548,8 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 {
     // blockIdx - index of block in grid
     // theadIdx - index of thread in block
-    unsigned int x = threadIdx.x;
-    unsigned int y = blockIdx.x;
+    int x = (int)threadIdx.x;
+    int y = (int)blockIdx.x;
     int randIndex = (x * y) % scene->width;
     int maxBounces = 8;
     float3 eye = make_float3(0.0, 0.0, 0.0);
@@ -562,10 +563,10 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene)
 //    sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(-p, p, 0), scene, 8, randIndex, false);
 //    sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(p, -p, 0), scene, 8, randIndex, false);
 //    uchar4 color = toRGBA(sampledColor/(float)numSamples);
+    float3 cVal = traceSingleRay(eye, ray, scene, maxBounces, randIndex, false);
+    uchar4 color = toRGBA(cVal);
 
-    uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, maxBounces, randIndex, false));
-
-    surf2Dwrite(color, image, x * sizeof(color), scene->height - y, cudaBoundaryModeClamp);
+    surf2Dwrite(color, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
 }
 
 __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, CudaScene* scene)
@@ -577,7 +578,7 @@ __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, C
     printf("\n\nRay (%f, %f, %f)\n", ray.x, ray.y, ray.z);
     uchar4 color = toRGBA(traceSingleRay(eye, ray, scene, maxBounces, randIndex, true));
     printf("Final Color: (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
-    surf2Dwrite(color, image, x * sizeof(color), scene->height - y, cudaBoundaryModeClamp);
+    surf2Dwrite(color, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -593,11 +594,15 @@ CudaKernelUtils::~CudaKernelUtils() {
 }
 
 void CudaKernelUtils::initializeRenderSurface(Texture* texture) {
-//    size_t stackLimit = 2048;
-//    cudaDeviceSetLimit(cudaLimitStackSize, stackLimit);
+    size_t stackLimit = 2048;
+    cudaDeviceSetLimit(cudaLimitStackSize, stackLimit);
+    size_t newHeapLimit = 16777216;
+    cudaDeviceSetLimit(cudaLimitMallocHeapSize, newHeapLimit);
 //    size_t getLimit;
 //    cudaDeviceGetLimit(&getLimit, cudaLimitStackSize);
 //    std::cout << "New Stack Size: " << getLimit << std::endl;
+
+
 
     struct cudaGraphicsResource *vbo_res;
     // register this texture with CUDA
@@ -618,7 +623,7 @@ void CudaKernelUtils::initializeRenderSurface(Texture* texture) {
 
 void CudaKernelUtils::renderScene(CudaScene* cudaScene, int h, int w) {
     kernel_traceRays<<<h, w>>>(CudaKernelUtils::viewCudaSurfaceObject, cudaScene);
-    //check(cudaDeviceSynchronize());
+    check(cudaDeviceSynchronize());
     //test hits
 //    Bounds* test = new Bounds(0.5, -0.5, -0.5, 0.5, -2.0, -3.0);
 //    std::cout << "AABB HIT: " << checkHitOnAABB(make_float3(0.0, 0.0, 0.0), make_float3(0.0, 0.0, -1.0), test) << std::endl;
@@ -659,6 +664,10 @@ void CudaKernelUtils::deviceInformation() {
         size_t stackLimit;
         cudaDeviceGetLimit(&stackLimit, cudaLimitStackSize);
         std::cout << "Stack Size: " << stackLimit << std::endl;
+
+        size_t heapLimit;
+        cudaDeviceGetLimit(&heapLimit, cudaLimitMallocHeapSize);
+        std::cout << "Heap Size: " << heapLimit << std::endl;
     }
 }
 

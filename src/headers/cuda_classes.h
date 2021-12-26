@@ -33,6 +33,7 @@ class CudaRTObject {
 public:
     int type;
     CudaMaterial* material;
+    CudaRTObject();
     explicit CudaRTObject(int _type);
     CudaRTObject(int _type, CudaMaterial* _material);
 };
@@ -78,6 +79,7 @@ public:
 class CudaLight: public CudaRTObject {
 public:
     int lightType;
+    CudaLight();
     CudaLight(int _lightType);
     CudaLight(int _lightType, float3 _color);
 };

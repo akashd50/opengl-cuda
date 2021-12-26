@@ -7,7 +7,7 @@
 //    }
 //};
 
-class Bounds {
+struct Bounds {
 public:
     float top, bottom, left, right, front, back;
     Bounds(): top(-9999), bottom(9999), left(9999), right(-9999), front(-9999), back(9999) {}

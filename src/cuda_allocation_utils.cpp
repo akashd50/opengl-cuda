@@ -25,6 +25,9 @@ T* cudaRead(T* src, int len) {
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------
+
 BVHBinaryNode* allocateBVH(BVHBinaryNode* node) {
     if (node == nullptr) {
         return node;
@@ -33,7 +36,9 @@ BVHBinaryNode* allocateBVH(BVHBinaryNode* node) {
     BVHBinaryNode tempNode = BVHBinaryNode();
     tempNode.left = allocateBVH(node->left);
     tempNode.right = allocateBVH(node->right);
-    tempNode.bounds = cudaWrite<Bounds>(node->bounds, 1);
+    if (node->bounds != nullptr) {
+        tempNode.bounds = cudaWrite<Bounds>(node->bounds, 1);
+    }
     if (node->numObjects != 0) {
         tempNode.objectsIndex = cudaWrite<int>(node->objectsIndex, node->numObjects);
         tempNode.numObjects = node->numObjects;
@@ -131,9 +136,91 @@ CudaScene* allocateCudaScene(CudaScene* scene) {
     return cudaWrite<CudaScene>(&tempScene, 1);
 }
 
-void cleanCudaScene(CudaScene* scene) {
-    for (int i=0; i<scene->numObjects; i++) {
-        cudaFree(scene->objects[i]);
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+
+void freeBVH(BVHBinaryNode* allocatedNode) {
+    if (allocatedNode == nullptr) return;
+
+    auto node = cudaRead<BVHBinaryNode>(allocatedNode, 1);
+
+    freeBVH(node->left);
+    freeBVH(node->right);
+
+    if (node->bounds != nullptr) cudaFree(node->bounds);
+    if (node->numObjects != 0) cudaFree(node->objectsIndex);
+
+    delete node;
+    cudaFree(allocatedNode);
+}
+
+void freeCudaObject(CudaRTObject* allocatedObject) {
+    auto object = cudaRead<CudaRTObject>(allocatedObject, 1);
+    if (object->material != nullptr) {
+        cudaFree(object->material);
     }
-    cudaFree(scene);
+    switch (object->type) {
+        case SPHERE: {
+            cudaFree((CudaSphere*)allocatedObject);
+            break;
+        }
+        case MESH: {
+            auto mesh = cudaRead<CudaMesh>((CudaMesh*)allocatedObject, 1);
+            cudaFree(mesh->triangles);
+            freeBVH(mesh->bvhRoot);
+
+            delete mesh;
+            cudaFree((CudaMesh*)allocatedObject);
+            break;
+        }
+    }
+
+    delete object;
+}
+
+void freeCudaLight(CudaRTObject* allocatedLight) {
+    auto light = cudaRead<CudaLight>((CudaLight*)allocatedLight, 1);
+    switch (light->lightType) {
+        case SKYBOX_LIGHT: {
+            auto skyboxLight = cudaRead<CudaSkyboxLight>((CudaSkyboxLight*)allocatedLight, 1);
+            freeCudaObject(skyboxLight->sphere);
+            delete skyboxLight;
+            cudaFree((CudaSkyboxLight*)allocatedLight);
+            break;
+        }
+        case POINT_LIGHT: {
+
+            break;
+        }
+    }
+    delete light;
+}
+
+void freeRandomGenerator(CudaRandomGenerator* allocatedGenerator) {
+    auto generator = cudaRead<CudaRandomGenerator>(allocatedGenerator, 1);
+    cudaFree(generator->randomNumbers);
+    delete generator;
+    cudaFree(allocatedGenerator);
+}
+
+void cleanCudaScene(CudaScene* allocatedScene) {
+    auto scene = cudaRead<CudaScene>(allocatedScene, 1);
+    scene->objects = cudaRead<CudaRTObject*>(scene->objects, scene->numObjects);
+    scene->lights = cudaRead<CudaRTObject*>(scene->lights, scene->numLights);
+    for (int i=0; i<scene->numObjects; i++) {
+        freeCudaObject(scene->objects[i]);
+    }
+
+    for (int i=0; i<scene->numLights; i++) {
+        freeCudaLight(scene->lights[i]);
+    }
+
+    freeRandomGenerator(scene->generator);
+
+    delete scene->objects;
+    delete scene->lights;
+    delete scene;
+
+    cudaFree(allocatedScene);
 }
