@@ -6,6 +6,7 @@
 #include <surface_indirect_functions.h>
 #include <cuda_runtime.h>
 #include "cuda_allocation_utils.h"
+#include <curand_kernel.h>
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -20,6 +21,8 @@ public:
     __device__ MinMaxT(float _minT, float _maxT): minT(_minT), maxT(_maxT) {}
 };
 
+//----------------------------------------------------------------------------------------------------------------------
+
 class HitInfo {
 public:
     CudaRTObject* object;
@@ -32,7 +35,9 @@ public:
         return t != MAX_T;
     }
 };
+
 //----------------------------------------------------------------------------------------------------------------------
+
 template <class T>
 class Stack {
 public:
@@ -72,6 +77,16 @@ public:
         pointer = 0;
     }
 };
+
+//----------------------------------------------------------------------------------------------------------------------
+
+struct CudaThreadData {
+    curandState randState;
+    int randIndex;
+    bool debug;
+    CudaScene* scene;
+};
+
 //----------------------------------------------------------------------------------------------------------------------
 
 class CudaKernelUtils {

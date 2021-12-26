@@ -49,11 +49,11 @@ void MainOpenGL::init()
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.5, 0.4));
     mat1->reflective = make_float3(0.2, 0.2, 0.2);
-    mat1->roughness = 1.0f;
+    mat1->roughness = 0.2f;
 
-    auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.2, 0.6));
-    mat2->reflective = make_float3(0.6, 0.6, 0.6);
-    mat2->roughness = 0.5f;
+    auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.6, 0.6, 0.6));
+    mat2->reflective = make_float3(0.3, 0.3, 0.3);
+    mat2->roughness = 1.0f;
 
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.2, 0.6));
     mat3->reflective = make_float3(0.2, 0.2, 0.2);
