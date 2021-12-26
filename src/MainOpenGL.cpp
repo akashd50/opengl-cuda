@@ -47,9 +47,9 @@ void MainOpenGL::init()
 
     cudaScene->addLight(new CudaSkyboxLight(new CudaSphere(make_float3(0.0, 0.0, 0.0), 50.0)));
 
-    auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.5, 0.4));
-    mat1->reflective = make_float3(0.2, 0.2, 0.2);
-    mat1->roughness = 0.2f;
+    auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.1, 0.1));
+    mat1->reflective = make_float3(0.9, 0.9, 0.9);
+    mat1->roughness = 0.1f;
 
     auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.6, 0.6, 0.6));
     mat2->reflective = make_float3(0.3, 0.3, 0.3);

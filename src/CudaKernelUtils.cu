@@ -407,10 +407,7 @@ __device__ void randFloat3(curandState &randState, float3 &vec) {
 }
 
 __device__ float3 getNewDiffuseRay(HitInfo &hitInfo, CudaThreadData &threadData) {
-    CudaRandomGenerator* generator = threadData.scene->generator;
     float3 p_n =  hitInfo.hitPoint + hitInfo.hitNormal;
-//    float3 p = p_n + clamp(normalize(make_float3(newRandomFloat(generator, threadData.randIndex), newRandomFloat(generator, threadData.randIndex),
-//                                 newRandomFloat(generator, threadData.randIndex))), -hitInfo.object->material->roughness, hitInfo.object->material->roughness);
     float3 vec = make_float3(0, 0, 0);
     while(true) {
         randFloat3(threadData.randState, vec);
@@ -425,20 +422,19 @@ __device__ float3 ray_color(const float3& r) {
     return (1.0f - t) * make_float3(0.5, 0.7, 1.0) + t * make_float3(1.0, 1.0, 1.0);
 }
 
-__device__ HitInfo doHitTest(float3 &eye, float3 &ray, CudaThreadData &threadData) {
-    HitInfo hit;
+__device__ void doHitTest(float3 &eye, float3 &ray, HitInfo &hitInfo, CudaThreadData &threadData) {
     CudaScene* scene = threadData.scene;
     for (int i=0; i<scene->numObjects; i++) {
         if (scene->objects[i]->type == SPHERE) {
             auto sphere = (CudaSphere*)scene->objects[i];
             float sphereHit = check_hit_on_sphere(eye, ray, sphere, threadData.debug);
-            if (sphereHit >= HIT_T_OFFSET && sphereHit < hit.t) {
-                hit.object = sphere;
-                hit.t = sphereHit;
-                hit.hitPoint = t_to_vec(eye, ray, sphereHit);
-                hit.hitNormal = getSphereNormal(hit.hitPoint, sphere);
-                hit.color = sphere->material->diffuse;
-                hit.index = i;
+            if (sphereHit >= HIT_T_OFFSET && sphereHit < hitInfo.t) {
+                hitInfo.object = sphere;
+                hitInfo.t = sphereHit;
+                hitInfo.hitPoint = t_to_vec(eye, ray, sphereHit);
+                hitInfo.hitNormal = getSphereNormal(hitInfo.hitPoint, sphere);
+                hitInfo.color = sphere->material->diffuse;
+                hitInfo.index = i;
                 if (threadData.debug) {
                     printf("doHitTest @ index (%d) with t (%f)\n", i, sphereHit);
                 }
@@ -447,13 +443,13 @@ __device__ HitInfo doHitTest(float3 &eye, float3 &ray, CudaThreadData &threadDat
         else if (scene->objects[i]->type == MESH) {
             auto mesh = (CudaMesh*)scene->objects[i];
             HitInfo meshHit = checkHitOnMeshHelperNR(eye, ray, mesh, threadData.debug);
-            if (meshHit.t >= HIT_T_OFFSET && meshHit.t < hit.t) {
-                hit.object = mesh;
-                hit.t = meshHit.t;
-                hit.hitPoint = t_to_vec(eye, ray, meshHit.t);
-                hit.hitNormal = meshHit.hitNormal;
-                hit.color = mesh->material->diffuse;
-                hit.index = i;
+            if (meshHit.t >= HIT_T_OFFSET && meshHit.t < hitInfo.t) {
+                hitInfo.object = mesh;
+                hitInfo.t = meshHit.t;
+                hitInfo.hitPoint = t_to_vec(eye, ray, meshHit.t);
+                hitInfo.hitNormal = meshHit.hitNormal;
+                hitInfo.color = mesh->material->diffuse;
+                hitInfo.index = i;
                 if (threadData.debug) {
                     printf("doHitTest @ index (%d) with t (%f)\n", i, meshHit.t);
                 }
@@ -461,12 +457,12 @@ __device__ HitInfo doHitTest(float3 &eye, float3 &ray, CudaThreadData &threadDat
 //            for (int j=0; j<mesh->numTriangles; j++) {
 //                CudaTriangle t = mesh->triangles[j];
 //                float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
-//                if (triangleHit >= HIT_T_OFFSET && triangleHit < hit.t) {
-//                    hit.object = mesh;
-//                    hit.t = triangleHit;
-//                    hit.hitPoint = t_to_vec(eye, ray, triangleHit);
-//                    hit.hitNormal = getTriangleNormal(t.a, t.b, t.c);
-//                    hit.index = i;
+//                if (triangleHit >= HIT_T_OFFSET && triangleHit < hitInfo.t) {
+//                    hitInfo.object = mesh;
+//                    hitInfo.t = triangleHit;
+//                    hitInfo.hitPoint = t_to_vec(eye, ray, triangleHit);
+//                    hitInfo.hitNormal = getTriangleNormal(t.a, t.b, t.c);
+//                    hitInfo.index = i;
 //                }
 //            }
         }
@@ -477,20 +473,19 @@ __device__ HitInfo doHitTest(float3 &eye, float3 &ray, CudaThreadData &threadDat
         if (light->lightType == SKYBOX_LIGHT) {
             auto sphere = ((CudaSkyboxLight*)scene->lights[i])->sphere;
             float sphereHit = check_hit_on_sphere(eye, ray, sphere, threadData.debug);
-            if (sphereHit >= HIT_T_OFFSET && sphereHit < hit.t) {
-                hit.object = light;
-                hit.t = sphereHit;
-                hit.hitPoint = t_to_vec(eye, ray, sphereHit);
-                hit.hitNormal = getSphereNormal(hit.hitPoint, sphere);
-                hit.color = ray_color(ray);
-                hit.index = i;
+            if (sphereHit >= HIT_T_OFFSET && sphereHit < hitInfo.t) {
+                hitInfo.object = light;
+                hitInfo.t = sphereHit;
+                hitInfo.hitPoint = t_to_vec(eye, ray, sphereHit);
+                hitInfo.hitNormal = getSphereNormal(hitInfo.hitPoint, sphere);
+                hitInfo.color = ray_color(ray);
+                hitInfo.index = i;
                 if (threadData.debug) {
                     printf("doHitTest @ index (%d) with t (%f)\n", i, sphereHit);
                 }
             }
         }
     }
-    return hit;
 }
 
 //__device__ HitInfo bounceDiffuseRays(HitInfo &hitInfo, CudaScene* scene, int &randIndex, int bounceIndex) {
@@ -520,13 +515,21 @@ __device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData
         if (light->lightType == SKYBOX_LIGHT) {
             float3 col = hitInfo.object->material->diffuse;
             float3 tempColor = make_float3(col.x, col.y, col.z);
-            int numRaySamples = 8;
+            int numRaySamples = 1;
             for(int n=0; n<numRaySamples; n++) {
                 float3 reflected = getNewDiffuseRay(hitInfo, threadData);
-                HitInfo newHit = doHitTest(hitInfo.hitPoint, reflected, threadData);
+                HitInfo newHit;
+                doHitTest(hitInfo.hitPoint, reflected, newHit, threadData);
                 if (newHit.object->type == LIGHT && newHit.index == i) {
-                    tempColor = tempColor + 0.5 * ray_color(reflected);
+                    tempColor = clamp(tempColor * ray_color(reflected) * 3.0, 0.0, 0.9);
                 }
+//                else {
+//                    float3 newReflected = getNewDiffuseRay(newHit, threadData);
+//                    HitInfo newNewHit = doHitTest(newHit.hitPoint, newReflected, threadData);
+//                    if (newNewHit.object->type == LIGHT && newNewHit.index == i) {
+//                        tempColor = tempColor + 0.5 * ray_color(newReflected);
+//                    }
+//                }
             }
             lighting = lighting + (tempColor/(float)numRaySamples);
         }
@@ -543,7 +546,8 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, int maxBounces, CudaThr
     bool isHit = true;
     int bounceIndex = 0;
     while(bounceIndex < maxBounces && isHit) {
-        HitInfo hitInfo = doHitTest(newEye, newRay, threadData);
+        HitInfo hitInfo;
+        doHitTest(newEye, newRay, hitInfo, threadData);
         if (hitInfo.isHit()) {
             stack->push(hitInfo);
             if (hitInfo.object->type >= LIGHT) {
