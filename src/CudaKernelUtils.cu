@@ -394,7 +394,7 @@ __device__ void randFloat3(curandState &randState, float3 &vec) {
 }
 
 __device__ float3 getReflectedDiffuseRay(HitInfo &hitInfo, CudaThreadData &threadData, bool useReflected) {
-    float3 p_n = hitInfo.point + (useReflected ? hitInfo.reflected * 1.4 : hitInfo.normal * 1.4);
+    float3 p_n = hitInfo.point + (useReflected ? hitInfo.reflected * 1.5 : hitInfo.normal * 1.5);
     float3 vec = make_float3(0, 0, 0);
     randFloat3(threadData.randState, vec);
 
@@ -458,54 +458,48 @@ __device__ void doHitTest(float3 &eye, float3 &ray, HitInfo &hitInfo, CudaThread
     }
 }
 
-__device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData) {
-    if (threadData.debug) {
-        printf("\n\nCalculating Lighting for Hit(%d) T(%f) P(%f, %f, %f) | Normal(%f, %f, %f)\n", hitInfo.index, hitInfo.t,
-               hitInfo.point.x, hitInfo.point.y, hitInfo.point.z, hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z);
-    }
-
-    if (hitInfo.object->type == LIGHT) {
-        return hitInfo.color;
-    }
-
+__device__ void getLighting(float3 &ray, CudaThreadData &threadData, float3 &lighting) {
     CudaScene* scene = threadData.scene;
-    float3 lighting = make_float3(0, 0, 0);
     for (int i=0; i<scene->numLights; i++) {
-        auto light = (CudaLight*)scene->lights[i];
+        auto light = (CudaLight *) scene->lights[i];
         if (light->lightType == SKYBOX_LIGHT) {
-            float3 diffuse = hitInfo.object->material->diffuse;
-            float3 tempColor = make_float3(0, 0, 0);
-            int numRaySamples = 8;
-            HitInfo newHit;
-            for(int n=0; n<numRaySamples; n++) {
-                float3 reflected = getReflectedDiffuseRay(hitInfo, threadData, false);
-                doHitTest(hitInfo.point, reflected, newHit, threadData);
-                if (threadData.debug) {
-                    printf("\n\nHitInfo(%d) Type(%d); Hit T(%f) @ (%f, %f, %f) | Normal(%f, %f, %f) | Ray(%f, %f, %f)\n",
-                           newHit.index, newHit.object->type, newHit.t, newHit.point.x, newHit.point.y, newHit.point.z,
-                           newHit.normal.x, newHit.normal.y, newHit.normal.z,
-                           reflected.x, reflected.y, reflected.z);
-                }
-                if (newHit.object->type == LIGHT && newHit.index == i) {
-                    tempColor = tempColor + ray_color(reflected);
-                }
-                else {
-                    newHit.reflected = normalize(getReflectedRay(newHit.point, reflected, newHit.normal));
-                    float3 newReflected = getReflectedDiffuseRay(newHit, threadData, true);
-                    newHit.t = MAX_T;
-                    doHitTest(newHit.point, newReflected, newHit, threadData);
-                    if (newHit.object->type == LIGHT && newHit.index == i) {
-                        tempColor = tempColor + ray_color(newReflected);
-                    }
-                }
-            }
-
-            tempColor = (tempColor/(float)numRaySamples) * diffuse;
-            //tempColor = tempColor/(float)numRaySamples;
-            //tempColor = tempColor * diffuse;
-            lighting = lighting + tempColor;
+            lighting = lighting + ray_color(ray);
         }
     }
+}
+
+__device__ void bounceLightRay(float3 &ray, HitInfo &newHit, CudaThreadData &threadData, float3 &lighting, int &index) {
+    if (index >= 3) return;
+
+    newHit.reflected = normalize(getReflectedRay(newHit.point, ray, newHit.normal));
+    ray = getReflectedDiffuseRay(newHit, threadData, true);
+    newHit.t = MAX_T;
+    doHitTest(newHit.point, ray, newHit, threadData);
+    if (newHit.object->type == LIGHT) {
+        getLighting(ray, threadData, lighting);
+    } else {
+        index++;
+        bounceLightRay(ray, newHit, threadData, lighting, index);
+    }
+}
+
+__device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData) {
+//    if (threadData.debug) {
+//        printf("\n\nCalculating Lighting for Hit(%d) T(%f) P(%f, %f, %f) | Normal(%f, %f, %f)\n", hitInfo.index, hitInfo.t,
+//               hitInfo.point.x, hitInfo.point.y, hitInfo.point.z, hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z);
+//    }
+
+    float3 lighting = make_float3(0, 0, 0);
+    HitInfo newHit;
+    float3 reflected = getReflectedDiffuseRay(hitInfo, threadData, false);
+    doHitTest(hitInfo.point, reflected, newHit, threadData);
+    if (newHit.object->type == LIGHT) {
+        getLighting(reflected, threadData, lighting);
+    }else {
+        int index = 0;
+        bounceLightRay(reflected, newHit, threadData, lighting, index);
+    }
+    lighting = lighting * hitInfo.object->material->diffuse;
     return lighting;
 }
 
