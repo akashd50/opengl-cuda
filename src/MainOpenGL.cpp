@@ -48,20 +48,23 @@ void MainOpenGL::init()
     cudaScene->addLight(new CudaSkyboxLight(new CudaSphere(make_float3(0.0, 0.0, 0.0), 50.0)));
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.6, 0.1));
-    mat1->reflective = make_float3(0.2, 0.2, 0.2);
-    mat1->roughness = 1.0f;
+    mat1->reflective = make_float3(0.9, 0.9, 0.9);
+    mat1->albedo = 0.5;
+    mat1->roughness = 0.01f;
 
     auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.6, 0.6, 0.6));
-    mat2->reflective = make_float3(0.9, 0.9, 0.9);
-    mat2->roughness = 0.01f;
+    mat2->reflective = make_float3(0.2, 0.2, 0.2);
+    mat2->albedo = 0.5;
+    mat2->roughness = 1.0f;
 
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.2, 0.6));
-    mat3->reflective = make_float3(0.4, 0.4, 0.4);
+    mat3->reflective = make_float3(0.2, 0.2, 0.2);
+    mat3->albedo = 0.5;
     mat3->roughness = 1.0f;
 
     cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));
 
-    CudaMesh* mesh = ObjDecoder::createMesh("../resources/monkey_mid.obj");
+    CudaMesh* mesh = ObjDecoder::createMesh("../resources/monkey_high.obj");
     mesh->material = mat3;
     cudaScene->addObject(mesh);
 

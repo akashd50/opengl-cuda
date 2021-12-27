@@ -19,7 +19,7 @@ public:
     float3 specular;
     float3 reflective;
     float3 transmissive;
-    float refraction, roughness, shininess;
+    float refraction, roughness, shininess, albedo;
 
     CudaMaterial(float3 _ambient, float3 _diffuse);
     CudaMaterial(float3 _ambient, float3 _diffuse, float3 _specular, float _shininess);
