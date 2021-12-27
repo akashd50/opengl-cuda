@@ -105,7 +105,6 @@ public:
 
 //----------------------------------------------------------------------------------------------------------------------
 
-
 class CudaMeshLight: public CudaLight {
 public:
     CudaMeshLight();
@@ -113,14 +112,6 @@ public:
 
 //----------------------------------------------------------------------------------------------------------------------
 
-class CudaRandomGenerator {
-public:
-    float* randomNumbers;
-    int index, numRand;
-    CudaRandomGenerator() {}
-};
-
-//----------------------------------------------------------------------------------------------------------------------
 class CudaScene {
 public:
     std::vector<CudaRTObject*>* hostObjects;
@@ -128,7 +119,6 @@ public:
     CudaRTObject** objects;
     CudaRTObject** lights;
     int numObjects, numLights, width, height;
-    CudaRandomGenerator* generator;
 
     CudaScene();
     CudaScene(CudaRTObject** _objects , int _numObjects);

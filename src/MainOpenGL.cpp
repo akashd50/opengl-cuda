@@ -23,7 +23,7 @@ int currRowIndex, currColumnIndex;
 const char* MainOpenGL::WINDOW_TITLE = "Raytracing with Cuda";
 const double MainOpenGL::FRAME_RATE_MS = 1000.0 / 60.0;
 const int RENDER_BLOCK_SIZE = 32;
-const int MAX_RENDER_THREADS_SIZE = 512;
+const int MAX_RENDER_THREADS_SIZE = 256;
 
 int MainOpenGL::WIDTH = 768;
 int MainOpenGL::HEIGHT = 768;
@@ -47,16 +47,16 @@ void MainOpenGL::init()
 
     cudaScene->addLight(new CudaSkyboxLight(new CudaSphere(make_float3(0.0, 0.0, 0.0), 50.0)));
 
-    auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.1, 0.1));
-    mat1->reflective = make_float3(0.9, 0.9, 0.9);
-    mat1->roughness = 0.1f;
+    auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.6, 0.1));
+    mat1->reflective = make_float3(0.4, 0.4, 0.4);
+    mat1->roughness = 1.0f;
 
     auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.6, 0.6, 0.6));
-    mat2->reflective = make_float3(0.3, 0.3, 0.3);
+    mat2->reflective = make_float3(0.4, 0.4, 0.4);
     mat2->roughness = 1.0f;
 
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.2, 0.6));
-    mat3->reflective = make_float3(0.2, 0.2, 0.2);
+    mat3->reflective = make_float3(0.4, 0.4, 0.4);
     mat3->roughness = 1.0f;
 
     cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));

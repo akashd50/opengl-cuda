@@ -113,27 +113,12 @@ CudaRTObject** allocateCudaLights(CudaScene* scene) {
     return cudaLightsPtr;
 }
 
-CudaRandomGenerator* allocateRandomGenerator(int num) {
-    CudaRandomGenerator tempGenerator;
-    auto numbers = new float[num];
-    for(int i=0; i<num; i++) {
-        float n = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-        numbers[i] = (n * 2.0f) - 1.0f;
-    }
-    tempGenerator.randomNumbers = cudaWrite<float>(numbers, num);
-    tempGenerator.numRand = num;
-    tempGenerator.index = 0;
-    delete[] numbers;
-    return cudaWrite<CudaRandomGenerator>(&tempGenerator, 1);
-}
-
 CudaScene* allocateCudaScene(CudaScene* scene) {
     CudaRTObject** cudaObjectsPtr = allocateCudaObjects(scene);
     CudaRTObject** cudaLightsPtr = allocateCudaLights(scene);
     CudaScene tempScene(cudaObjectsPtr, scene->numObjects, cudaLightsPtr, scene->numLights);
     tempScene.width = scene->width;
     tempScene.height = scene->height;
-    tempScene.generator = allocateRandomGenerator(scene->width);
     return cudaWrite<CudaScene>(&tempScene, 1);
 }
 
@@ -198,13 +183,6 @@ void freeCudaLight(CudaRTObject* allocatedLight) {
     delete light;
 }
 
-void freeRandomGenerator(CudaRandomGenerator* allocatedGenerator) {
-    auto generator = cudaRead<CudaRandomGenerator>(allocatedGenerator, 1);
-    cudaFree(generator->randomNumbers);
-    delete generator;
-    cudaFree(allocatedGenerator);
-}
-
 void cleanCudaScene(CudaScene* allocatedScene) {
     auto scene = cudaRead<CudaScene>(allocatedScene, 1);
     scene->objects = cudaRead<CudaRTObject*>(scene->objects, scene->numObjects);
@@ -216,8 +194,6 @@ void cleanCudaScene(CudaScene* allocatedScene) {
     for (int i=0; i<scene->numLights; i++) {
         freeCudaLight(scene->lights[i]);
     }
-
-    freeRandomGenerator(scene->generator);
 
     delete scene->objects;
     delete scene->lights;

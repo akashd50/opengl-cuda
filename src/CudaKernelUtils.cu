@@ -140,6 +140,34 @@ __device__ float checkHitOnTriangle(float3 e, float3 d, float3 a, float3 b, floa
     return MAX_T;
 }
 
+__device__ bool check_hit_on_sphere(float3 &eye, float3 &ray, CudaSphere* sphere, HitInfo &hitInfo, bool debug) {
+    float3 center_2_eye = eye - sphere->position;
+    float ray_dot_ray = dot(ray, ray);
+    float discriminant = pow(dot(ray, center_2_eye), 2) - ray_dot_ray * (dot(center_2_eye, center_2_eye) - pow(sphere->radius, 2));
+    float mint = MAX_T;
+    if (discriminant > 0) {
+        discriminant = sqrt(discriminant);
+        float init = -dot(ray, center_2_eye);
+        float t1 = (init + discriminant) / ray_dot_ray;
+        float t2 = (init - discriminant) / ray_dot_ray;
+
+        mint = min(t1, t2);
+        if (mint < HIT_T_OFFSET) {
+            mint = max(t1, t2);
+        }
+    }
+    else if (discriminant == 0) {
+        float init = -dot(ray, center_2_eye);
+        mint = init / ray_dot_ray;
+    }
+
+    if (mint >= HIT_T_OFFSET && mint < hitInfo.t) {
+        hitInfo.t = mint;
+        return true;
+    }
+    return false;
+}
+
 __device__ void printBounds(Bounds* bounds) {
     printf("AABB (%0.2f, %0.2f, %0.2f, %0.2f, %0.2f, %0.2f)", bounds->top, bounds->bottom,
            bounds->left, bounds->right, bounds->front, bounds->back);
@@ -255,11 +283,11 @@ __device__ MinMaxT checkHitOnAABB(float3 &eye, float3 &ray, Bounds* bounds, bool
     return {tmin != tmin ? 0 : tmin, tmax != tmax ? 0 : tmax};
 }
 
-__device__ void checkHitOnNodeTriangles(float3 &eye, float3 &ray, BVHBinaryNode* node, CudaMesh* mesh, HitInfo &hitInfo, bool debug) {
+__device__ bool checkHitOnNodeTriangles(float3 &eye, float3 &ray, BVHBinaryNode* node, CudaMesh* mesh, HitInfo &hitInfo, bool debug) {
 //    if (debug) {
 //        printf("Starting to check hits on triangles in node NumObjects(%d)\n", node->numObjects);
 //    }
-
+    bool tUpdated = false;
     if (node != nullptr && node->numObjects != 0) { // Is a leaf node
         for (int j=0; j<node->numObjects; j++) {
             int objIndex = node->objectsIndex[j];
@@ -271,33 +299,33 @@ __device__ void checkHitOnNodeTriangles(float3 &eye, float3 &ray, BVHBinaryNode*
 //            if(debug) {
 //                printf("Checking hits on triangle (%d) -- (%f)\n", node->objectsIndex[j], triangleHit);
 //            }
-            if (triangleHit <= hitInfo.t && triangleHit >= HIT_T_OFFSET_1) {
+            if (triangleHit < hitInfo.t && triangleHit >= HIT_T_OFFSET_1) {
                 hitInfo.t = triangleHit;
-                hitInfo.hitNormal = getTriangleNormal(t.a, t.b, t.c);
-//                if (debug) {
-//                    printf("New hit on triangle at (%d) MinT (%f)\n", node->objectsIndex[j], hitInfo.t);
-//                }
+                hitInfo.normal = getTriangleNormal(t.a, t.b, t.c);
+                tUpdated = true;
+                if (debug) {
+                    printf("New hit on triangle at (%d) MinT (%f)\n", node->objectsIndex[j], hitInfo.t);
+                }
             }
         }
     }
-//    if (debug) {
-//        printf("Finished checking hits on triangles in node NumObjects(%d)\n", node->numObjects);
-//    }
+
+    return tUpdated;
 }
 
-__device__ HitInfo checkHitOnMeshHelperNR(float3 &eye, float3 &ray, CudaMesh* mesh, bool debug) {
+__device__ bool checkHitOnMeshHelperNR(float3 &eye, float3 &ray, CudaMesh* mesh, HitInfo &hitInfo, bool debug) {
     if (debug) {
-        printf("Starting to check hit on Mesh\n");
+        printf("\n\nStarting to check hit on Mesh\n");
     }
-    HitInfo hitInfo;
 
-    auto stack = (Stack<BVHBinaryNode*>*)malloc(sizeof(Stack<BVHBinaryNode*>));
-    if (!stack->init()) return hitInfo;
+    //auto stack = (Stack<BVHBinaryNode*>*)malloc(sizeof(Stack<BVHBinaryNode*>));
+    auto stack = new Stack<BVHBinaryNode*>();
+    if (!stack->init()) return false;
 //    if (debug) {
 //        printf("Stack initialized\n");
 //    }
 
-    float minAABB = MAX_T;
+    //float minAABB = MAX_T;
     // start from the root node (set current node to the root node)
     BVHBinaryNode* curr = mesh->bvhRoot;
 //    if (debug) {
@@ -305,6 +333,7 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 &eye, float3 &ray, CudaMesh* me
 //        printf("Stack Empty (%d)\n", stack->empty());
 //    }
     // if the current node is null and the stack is also empty, we are done
+    bool tUpdated = false;
     while (!stack->empty() || curr != nullptr)
     {
         // if the current node exists, push it into the stack (defer it)
@@ -324,7 +353,10 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 &eye, float3 &ray, CudaMesh* me
             if (currT.minT != MIN_T && currT.maxT != MAX_T
             && currT.minT <= hitInfo.t && currT.maxT >= 0) {
                 //minAABB = currT;
-                checkHitOnNodeTriangles(eye, ray, curr, mesh, hitInfo, debug);
+                if (checkHitOnNodeTriangles(eye, ray, curr, mesh, hitInfo, debug)) {
+                    tUpdated = true;
+                }
+
                 stack->push(curr);
                 curr = curr->left;
             } else {
@@ -343,36 +375,7 @@ __device__ HitInfo checkHitOnMeshHelperNR(float3 &eye, float3 &ray, CudaMesh* me
 
     stack->clean();
     free(stack);
-    return hitInfo;
-}
-
-__device__ float doTChecks(float newT, float oldT) {
-    return newT > 0 && newT < oldT ? newT : oldT;
-}
-
-__device__ float check_hit_on_sphere(float3 &eye, float3 &ray, CudaSphere* sphere, bool debug) {
-    float3 center_2_eye = eye - sphere->position;
-    float ray_dot_ray = dot(ray, ray);
-    float discriminant = pow(dot(ray, center_2_eye), 2) - ray_dot_ray * (dot(center_2_eye, center_2_eye) - pow(sphere->radius, 2));
-
-    if (discriminant > 0) {
-        discriminant = sqrt(discriminant);
-        float init = -dot(ray, center_2_eye);
-        float t1 = (init + discriminant) / ray_dot_ray;
-        float t2 = (init - discriminant) / ray_dot_ray;
-
-        float mint = min(t1, t2);
-        if (mint < HIT_T_OFFSET) {
-            return max(t1, t2);
-        }
-        return mint;
-    }
-    else if (discriminant == 0) {
-        float init = -dot(ray, center_2_eye);
-        float t1 = init / ray_dot_ray;
-        return t1;
-    }
-    return MAX_T;
+    return tUpdated;
 }
 
 __device__ int wang_hash(int seed) {
@@ -384,37 +387,22 @@ __device__ int wang_hash(int seed) {
     return seed;
 }
 
-__device__ float newRandomFloat(CudaRandomGenerator* generator, int &randIndex) {
-    if (randIndex < generator->numRand) {
-        return generator->randomNumbers[randIndex++];
-    } else {
-        randIndex = 0;
-        return generator->randomNumbers[randIndex++];
-    }
-}
-
 __device__ void randFloat3(curandState &randState, float3 &vec) {
     vec.x = curand_normal(&randState);
     vec.y = curand_normal(&randState);
     vec.z = curand_normal(&randState);
-
-    vec.x = vec.x > 1.0 ? vec.x - 1.0f : vec.x;
-    vec.y = vec.y > 1.0 ? vec.y - 1.0f : vec.y;
-    vec.z = vec.z > 1.0 ? vec.z - 1.0f : vec.z;
-    vec.x = vec.x < -1.0 ? vec.x + 1.0f : vec.x;
-    vec.y = vec.y < -1.0 ? vec.y + 1.0f : vec.y;
-    vec.z = vec.z < -1.0 ? vec.z + 1.0f : vec.z;
 }
 
-__device__ float3 getNewDiffuseRay(HitInfo &hitInfo, CudaThreadData &threadData) {
-    float3 p_n =  hitInfo.hitPoint + hitInfo.hitNormal;
+__device__ float3 getReflectedDiffuseRay(HitInfo &hitInfo, CudaThreadData &threadData, bool useReflected) {
+    float3 p_n = hitInfo.point + (useReflected ? hitInfo.reflected * 1.4 : hitInfo.normal * 1.4);
     float3 vec = make_float3(0, 0, 0);
-    while(true) {
-        randFloat3(threadData.randState, vec);
-        if (len_squared(vec) <= hitInfo.object->material->roughness) break;
-    }
+    randFloat3(threadData.randState, vec);
+
+    /*if (len_squared(vec) > hitInfo.object->material->roughness)*/ vec = normalize(vec);
+    vec = vec * hitInfo.object->material->roughness;
+
     float3 p = p_n + vec;
-    return normalize(p - hitInfo.hitPoint);
+    return normalize(p - hitInfo.point);
 }
 
 __device__ float3 ray_color(const float3& r) {
@@ -427,44 +415,28 @@ __device__ void doHitTest(float3 &eye, float3 &ray, HitInfo &hitInfo, CudaThread
     for (int i=0; i<scene->numObjects; i++) {
         if (scene->objects[i]->type == SPHERE) {
             auto sphere = (CudaSphere*)scene->objects[i];
-            float sphereHit = check_hit_on_sphere(eye, ray, sphere, threadData.debug);
-            if (sphereHit >= HIT_T_OFFSET && sphereHit < hitInfo.t) {
+            if (check_hit_on_sphere(eye, ray, sphere, hitInfo, threadData.debug)) {
                 hitInfo.object = sphere;
-                hitInfo.t = sphereHit;
-                hitInfo.hitPoint = t_to_vec(eye, ray, sphereHit);
-                hitInfo.hitNormal = getSphereNormal(hitInfo.hitPoint, sphere);
+                hitInfo.point = t_to_vec(eye, ray, hitInfo.t);
+                hitInfo.normal = getSphereNormal(hitInfo.point, sphere);
                 hitInfo.color = sphere->material->diffuse;
                 hitInfo.index = i;
                 if (threadData.debug) {
-                    printf("doHitTest @ index (%d) with t (%f)\n", i, sphereHit);
+                    printf("\n\ndoHitTest @ index (%d) with t (%f)\n", i, hitInfo.t);
                 }
             }
         }
         else if (scene->objects[i]->type == MESH) {
             auto mesh = (CudaMesh*)scene->objects[i];
-            HitInfo meshHit = checkHitOnMeshHelperNR(eye, ray, mesh, threadData.debug);
-            if (meshHit.t >= HIT_T_OFFSET && meshHit.t < hitInfo.t) {
+            if (checkHitOnMeshHelperNR(eye, ray, mesh, hitInfo, threadData.debug)) {
                 hitInfo.object = mesh;
-                hitInfo.t = meshHit.t;
-                hitInfo.hitPoint = t_to_vec(eye, ray, meshHit.t);
-                hitInfo.hitNormal = meshHit.hitNormal;
+                hitInfo.point = t_to_vec(eye, ray, hitInfo.t);
                 hitInfo.color = mesh->material->diffuse;
                 hitInfo.index = i;
                 if (threadData.debug) {
-                    printf("doHitTest @ index (%d) with t (%f)\n", i, meshHit.t);
+                    printf("\n\ndoHitTest @ index (%d) with t (%f)\n", i, hitInfo.t);
                 }
             }
-//            for (int j=0; j<mesh->numTriangles; j++) {
-//                CudaTriangle t = mesh->triangles[j];
-//                float triangleHit = checkHitOnTriangle(eye, ray, t.a, t.b, t.c);
-//                if (triangleHit >= HIT_T_OFFSET && triangleHit < hitInfo.t) {
-//                    hitInfo.object = mesh;
-//                    hitInfo.t = triangleHit;
-//                    hitInfo.hitPoint = t_to_vec(eye, ray, triangleHit);
-//                    hitInfo.hitNormal = getTriangleNormal(t.a, t.b, t.c);
-//                    hitInfo.index = i;
-//                }
-//            }
         }
     }
 
@@ -472,73 +444,72 @@ __device__ void doHitTest(float3 &eye, float3 &ray, HitInfo &hitInfo, CudaThread
         auto light = (CudaLight*)scene->lights[i];
         if (light->lightType == SKYBOX_LIGHT) {
             auto sphere = ((CudaSkyboxLight*)scene->lights[i])->sphere;
-            float sphereHit = check_hit_on_sphere(eye, ray, sphere, threadData.debug);
-            if (sphereHit >= HIT_T_OFFSET && sphereHit < hitInfo.t) {
+            if (check_hit_on_sphere(eye, ray, sphere, hitInfo, threadData.debug)) {
                 hitInfo.object = light;
-                hitInfo.t = sphereHit;
-                hitInfo.hitPoint = t_to_vec(eye, ray, sphereHit);
-                hitInfo.hitNormal = getSphereNormal(hitInfo.hitPoint, sphere);
+                hitInfo.point = t_to_vec(eye, ray, hitInfo.t);
+                hitInfo.normal = getSphereNormal(hitInfo.point, sphere);
                 hitInfo.color = ray_color(ray);
                 hitInfo.index = i;
                 if (threadData.debug) {
-                    printf("doHitTest @ index (%d) with t (%f)\n", i, sphereHit);
+                    printf("\n\ndoHitTest @ index (%d) with t (%f)\n", i, hitInfo.t);
                 }
             }
         }
     }
 }
 
-//__device__ HitInfo bounceDiffuseRays(HitInfo &hitInfo, CudaScene* scene, int &randIndex, int bounceIndex) {
-//    HitInfo newHit;
-//    float3 col = hitInfo.object->material->diffuse;
-//    newHit.color = make_float3(col.x, col.y, col.z);
-//    int numRaySamples = 4;
-//    for(int n=0; n<numRaySamples; n++) {
-//        float3 reflected = getNewDiffuseRay(scene, hitInfo, randIndex);
-//        HitInfo t = doHitTest(hitInfo.hitPoint, reflected, scene, false);
-//        if (t.object->type == LIGHT && ((CudaLight*)t.object)->lightType == SKYBOX_LIGHT) {
-//            newHit.color = newHit.color + 0.5 * ray_color(reflected);
-//        }
-//    }
-//    newHit.color = (newHit.color/(float)numRaySamples);
-//    return newHit;
-//}
-
 __device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData) {
+    if (threadData.debug) {
+        printf("\n\nCalculating Lighting for Hit(%d) T(%f) P(%f, %f, %f) | Normal(%f, %f, %f)\n", hitInfo.index, hitInfo.t,
+               hitInfo.point.x, hitInfo.point.y, hitInfo.point.z, hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z);
+    }
+
     if (hitInfo.object->type == LIGHT) {
         return hitInfo.color;
     }
+
     CudaScene* scene = threadData.scene;
     float3 lighting = make_float3(0, 0, 0);
     for (int i=0; i<scene->numLights; i++) {
         auto light = (CudaLight*)scene->lights[i];
         if (light->lightType == SKYBOX_LIGHT) {
-            float3 col = hitInfo.object->material->diffuse;
-            float3 tempColor = make_float3(col.x, col.y, col.z);
+            float3 diffuse = hitInfo.object->material->diffuse;
+            float3 tempColor = make_float3(0, 0, 0);
             int numRaySamples = 1;
+            HitInfo newHit;
             for(int n=0; n<numRaySamples; n++) {
-                float3 reflected = getNewDiffuseRay(hitInfo, threadData);
-                HitInfo newHit;
-                doHitTest(hitInfo.hitPoint, reflected, newHit, threadData);
-                if (newHit.object->type == LIGHT && newHit.index == i) {
-                    tempColor = clamp(tempColor * ray_color(reflected) * 3.0, 0.0, 0.9);
+                float3 reflected = getReflectedDiffuseRay(hitInfo, threadData, false);
+                doHitTest(hitInfo.point, reflected, newHit, threadData);
+                if (threadData.debug) {
+                    printf("\n\nHitInfo(%d) Type(%d); Hit T(%f) @ (%f, %f, %f) | Normal(%f, %f, %f) | Ray(%f, %f, %f)\n",
+                           newHit.index, newHit.object->type, newHit.t, newHit.point.x, newHit.point.y, newHit.point.z,
+                           newHit.normal.x, newHit.normal.y, newHit.normal.z,
+                           reflected.x, reflected.y, reflected.z);
                 }
-//                else {
-//                    float3 newReflected = getNewDiffuseRay(newHit, threadData);
-//                    HitInfo newNewHit = doHitTest(newHit.hitPoint, newReflected, threadData);
-//                    if (newNewHit.object->type == LIGHT && newNewHit.index == i) {
-//                        tempColor = tempColor + 0.5 * ray_color(newReflected);
-//                    }
-//                }
+                if (newHit.object->type == LIGHT
+                && newHit.index == i) {
+                    tempColor = tempColor + ray_color(reflected);
+                }
+                else {
+                    float3 newReflected = getReflectedDiffuseRay(newHit, threadData, false);
+                    doHitTest(newHit.point, newReflected, newHit, threadData);
+                    if (newHit.object->type == LIGHT && newHit.index == i) {
+                        tempColor = tempColor + ray_color(newReflected);
+                    }
+                }
             }
-            lighting = lighting + (tempColor/(float)numRaySamples);
+
+            tempColor = (tempColor/(float)numRaySamples) * diffuse;
+            //tempColor = tempColor * diffuse;
+            lighting = lighting + tempColor;
         }
     }
     return lighting;
 }
 
 __device__ float3 traceSingleRay(float3 eye, float3 ray, int maxBounces, CudaThreadData &threadData) {
-    auto stack = (Stack<HitInfo>*)malloc(sizeof(Stack<HitInfo>));
+    //auto stack = (Stack<HitInfo>*)malloc(sizeof(Stack<HitInfo>));
+    auto stack = new Stack<HitInfo>();
     stack->init();
 
     float3 newRay = ray;
@@ -556,13 +527,13 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, int maxBounces, CudaThr
                 break;
             }
 
-            //newRay = normalize(getReflectedRay(eye, ray, hitInfo.hitNormal));
-            newRay = getNewDiffuseRay(hitInfo, threadData);
-            newEye = hitInfo.hitPoint;
+            hitInfo.reflected = normalize(getReflectedRay(eye, ray, hitInfo.normal));
+            newRay = getReflectedDiffuseRay(hitInfo, threadData, true); // Need to consider the incoming ray for reflectance
+            newEye = hitInfo.point;
             if (threadData.debug) {
-                printf("HitInfo(%d); Hit T(%f) @ (%f, %f, %f) | Normal(%f, %f, %f) | Reflected(%f, %f, %f)\n",
-                       hitInfo.index, hitInfo.t, hitInfo.hitPoint.x, hitInfo.hitPoint.y, hitInfo.hitPoint.z,
-                       hitInfo.hitNormal.x, hitInfo.hitNormal.y, hitInfo.hitNormal.z,
+                printf("\n\nHitInfo(%d); Hit T(%f) @ (%f, %f, %f) | Normal(%f, %f, %f) | Reflected(%f, %f, %f)\n",
+                       hitInfo.index, hitInfo.t, hitInfo.point.x, hitInfo.point.y, hitInfo.point.z,
+                       hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z,
                        newRay.x, newRay.y, newRay.z);
             }
         } else {
@@ -625,7 +596,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  i
 
     int numSamples = 4;
     float3 sampledColor = make_float3(0, 0, 0);
-    float p = 0.0005;
+    float p = 0.0005f /* curand_normal(&threadData.randState)*/;
     sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(p, p, 0), maxBounces, threadData);
     sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(-p, -p, 0), maxBounces, threadData);
     sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(-p, p, 0), maxBounces, threadData);
@@ -640,11 +611,6 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  i
 
 __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, CudaScene* scene)
 {
-
-//    printf("New Rand %f\n", curand_normal(&s));
-//    printf("New Rand %f\n", curand_normal(&s));
-//    printf("New Rand %f\n", curand_normal(&s));
-
     int randIndex = (x * y) % scene->width;
     int maxBounces = 8;
 
@@ -656,26 +622,12 @@ __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, C
     threadData.randIndex = randIndex;
     threadData.scene = scene;
 
-//    for (int i=0; i<20; i++) {
-//        float3 vec = randFloat3(threadData.randState);
-//        vec.x = vec.x > 1.0 ? vec.x - 1.0f : vec.x;
-//        vec.y = vec.y > 1.0 ? vec.y - 1.0f : vec.y;
-//        vec.z = vec.z > 1.0 ? vec.z - 1.0f : vec.z;
-//
-//        vec.x = vec.x < -1.0 ? vec.x + 1.0f : vec.x;
-//        vec.y = vec.y < -1.0 ? vec.y + 1.0f : vec.y;
-//        vec.z = vec.z < -1.0 ? vec.z + 1.0f : vec.z;
-//
-//        printf("New Vector (%f, %f, %f)\n", vec.x, vec.y, vec.z);
-//        printf("Len Squared %f\n", len_squared(vec));
-//    }
-
-//    float3 eye = make_float3(0.0, 0.0, 0.0);
-//    float3 ray = cast_ray(x, y, scene->width, scene->height) - eye;
-//    printf("\n\nRay (%f, %f, %f)\n", ray.x, ray.y, ray.z);
-//    uchar4 color = toRGBA(traceSingleRay(eye, ray, maxBounces, threadData));
-//    printf("Final Color: (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
-//    surf2Dwrite(color, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
+    float3 eye = make_float3(0.0, 0.0, 0.0);
+    float3 ray = cast_ray(x, y, scene->width, scene->height) - eye;
+    printf("\n\nRay (%f, %f, %f)\n", ray.x, ray.y, ray.z);
+    uchar4 color = toRGBA(traceSingleRay(eye, ray, maxBounces, threadData));
+    printf("Final Color: (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
+    surf2Dwrite(color, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -686,9 +638,9 @@ CudaKernelUtils::CudaKernelUtils() {}
 CudaKernelUtils::~CudaKernelUtils() {}
 
 void CudaKernelUtils::initializeRenderSurface(Texture* texture) {
-    size_t stackLimit = 2048;
+    size_t stackLimit = 4096;
     cudaDeviceSetLimit(cudaLimitStackSize, stackLimit);
-    size_t newHeapLimit = 16777216;
+    size_t newHeapLimit = 33554432;
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, newHeapLimit);
 //    size_t getLimit;
 //    cudaDeviceGetLimit(&getLimit, cudaLimitStackSize);
