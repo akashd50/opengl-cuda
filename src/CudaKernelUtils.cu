@@ -475,7 +475,7 @@ __device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData
         if (light->lightType == SKYBOX_LIGHT) {
             float3 diffuse = hitInfo.object->material->diffuse;
             float3 tempColor = make_float3(0, 0, 0);
-            int numRaySamples = 1;
+            int numRaySamples = 8;
             HitInfo newHit;
             for(int n=0; n<numRaySamples; n++) {
                 float3 reflected = getReflectedDiffuseRay(hitInfo, threadData, false);
@@ -486,12 +486,13 @@ __device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData
                            newHit.normal.x, newHit.normal.y, newHit.normal.z,
                            reflected.x, reflected.y, reflected.z);
                 }
-                if (newHit.object->type == LIGHT
-                && newHit.index == i) {
+                if (newHit.object->type == LIGHT && newHit.index == i) {
                     tempColor = tempColor + ray_color(reflected);
                 }
                 else {
-                    float3 newReflected = getReflectedDiffuseRay(newHit, threadData, false);
+                    newHit.reflected = normalize(getReflectedRay(newHit.point, reflected, newHit.normal));
+                    float3 newReflected = getReflectedDiffuseRay(newHit, threadData, true);
+                    newHit.t = MAX_T;
                     doHitTest(newHit.point, newReflected, newHit, threadData);
                     if (newHit.object->type == LIGHT && newHit.index == i) {
                         tempColor = tempColor + ray_color(newReflected);
@@ -500,6 +501,7 @@ __device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData
             }
 
             tempColor = (tempColor/(float)numRaySamples) * diffuse;
+            //tempColor = tempColor/(float)numRaySamples;
             //tempColor = tempColor * diffuse;
             lighting = lighting + tempColor;
         }
@@ -603,7 +605,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  i
     sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(p, -p, 0), maxBounces, threadData);
     uchar4 color = toRGBA(sampledColor/(float)numSamples);
 
-//    float3 cVal = traceSingleRay(eye, ray, scene, maxBounces, randIndex, false);
+//    float3 cVal = traceSingleRay(eye, ray, maxBounces, threadData);
 //    uchar4 color = toRGBA(cVal);
 
     surf2Dwrite(color, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
