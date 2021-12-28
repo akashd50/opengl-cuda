@@ -4,18 +4,35 @@
 #include <iostream>
 #include "headers/ObjDecoder.h"
 #include "headers/Utils.h"
+#include <glm/gtc/matrix_transform.hpp>
 
-CudaMesh* ObjDecoder::createMesh(const std::string& file) {
+float3 applyTransformations(glm::vec3 point, glm::mat4 transformationMatrix) {
+    glm::vec4 transformed = transformationMatrix * glm::vec4(point, 1.0);
+    return make_float3(transformed.x, transformed.y, transformed.z);
+}
+
+glm::mat4 ObjDecoder::createTransformationMatrix(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale) {
+    glm::mat4 transformationMatrix = glm::mat4();
+    transformationMatrix = glm::identity<glm::mat4>();
+    transformationMatrix = glm::translate(transformationMatrix, translation);
+    transformationMatrix = glm::rotate(transformationMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+    transformationMatrix = glm::rotate(transformationMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+    transformationMatrix = glm::rotate(transformationMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+    transformationMatrix = glm::scale(transformationMatrix, scale);
+    return transformationMatrix;
+}
+
+CudaMesh* ObjDecoder::createMesh(const std::string& file, glm::mat4 transformationMatrix) {
     CudaMesh* mesh = CudaMesh::newHostMesh();
     mesh->numTriangles = 0;
     BVHBinaryNode* root = mesh->bvhRoot;
     RawData rawData = readFile(file);
     for (int i = 0; i < rawData.faceConfiguration->size(); i++) {
         config curr = rawData.faceConfiguration->at(i);
-        glm::vec3 v1 = rawData.vertices->at(curr.v1);
-        glm::vec3 v2 = rawData.vertices->at(curr.v2);
-        glm::vec3 v3 = rawData.vertices->at(curr.v3);
-        mesh->addTriangle(CudaTriangle(vec3ToFloat3(v1), vec3ToFloat3(v2), vec3ToFloat3(v3)));
+        float3 v1 = applyTransformations(rawData.vertices->at(curr.v1), transformationMatrix);
+        float3 v2 = applyTransformations(rawData.vertices->at(curr.v2), transformationMatrix);
+        float3 v3 = applyTransformations(rawData.vertices->at(curr.v3), transformationMatrix);
+        mesh->addTriangle(CudaTriangle(v1, v2, v3));
 
         float maxX = std::fmax(std::fmax(v1.x, v2.x), v3.x);
         float minX = std::fmin(std::fmin(v1.x, v2.x), v3.x);
@@ -30,13 +47,6 @@ CudaMesh* ObjDecoder::createMesh(const std::string& file) {
         root->bounds->front = std::fmax(maxZ, root->bounds->front);
         root->bounds->back = std::fmin(minZ, root->bounds->back);
     }
-
-//    mesh->bounds->right += 0.1;
-//    mesh->bounds->left -= 0.1;
-//    mesh->bounds->top += 0.1;
-//    mesh->bounds->bottom -= 0.1;
-//    mesh->bounds->front += 0.1;
-//    mesh->bounds->back -= 0.1;
 
     std::cout << "End of Loading... - " << file << "\n";
 

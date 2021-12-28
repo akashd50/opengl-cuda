@@ -18,6 +18,7 @@ struct RawData {
 
 class ObjDecoder {
 public:
-    static CudaMesh* createMesh(const std::string& file);
+    static glm::mat4 createTransformationMatrix(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale);
+    static CudaMesh* createMesh(const std::string& file, glm::mat4 transformationMatrix);
     static RawData readFile(const std::string& filename);
 };

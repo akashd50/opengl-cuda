@@ -180,7 +180,7 @@ BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangle
 BVHBinaryNode* CudaMesh::createMeshTree2(std::vector<CudaTriangle>* localTriangles, std::vector<int>* indices, BVHBinaryNode* node, int depth) {
     maxBVHDepth = std::max(depth, maxBVHDepth);
     int len = indices->size();
-    if (len <= 30 || depth >= 20) {
+    if (len <= 20 || depth >= 24) {
         int* localIndices = new int[len];
         for (int i=0; i<len; i++) { localIndices[i] = indices->at(i); }
         node->objectsIndex = localIndices;
@@ -216,7 +216,6 @@ BVHBinaryNode* CudaMesh::createMeshTree2(std::vector<CudaTriangle>* localTriangl
         node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, nb.front, mid));
     }
 
-    auto currNodeIndices = new std::vector<int>();
     for (int index : *indices) {
         //divide along the axis with max length
         CudaTriangle t = localTriangles->at(index);
@@ -225,9 +224,6 @@ BVHBinaryNode* CudaMesh::createMeshTree2(std::vector<CudaTriangle>* localTriangl
         }
         else if (isTriangleCentroidInBounds(&t, node->right->bounds)) {
             rightTriangles->push_back(index);
-        }
-        else {
-            currNodeIndices->push_back(index);
         }
     }
 
@@ -239,8 +235,6 @@ BVHBinaryNode* CudaMesh::createMeshTree2(std::vector<CudaTriangle>* localTriangl
     node->right = createMeshTree2(localTriangles, rightTriangles, node->right, depth + 1);
     delete rightTriangles;
 
-    node->objectsIndex = currNodeIndices->data();
-    node->numObjects = currNodeIndices->size();
     return node;
 }
 

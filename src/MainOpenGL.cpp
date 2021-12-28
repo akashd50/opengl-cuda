@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
+#include <chrono>
 #include "headers/CudaKernelUtils.cuh"
 #include "headers/MainOpenGL.h"
 #include "headers/Quad.h"
@@ -16,10 +17,9 @@ Quad* quad;
 Shader* single_color_shader, *texture_shader;
 //Framebuffer* default_framebuffer;
 Texture* test_texture;
-// ---------------------------------------------------------------------------------------------------------------------
-int currRowIndex, currColumnIndex;
 
 // ---------------------------------------------------------------------------------------------------------------------
+
 const char* MainOpenGL::WINDOW_TITLE = "Raytracing with Cuda";
 const double MainOpenGL::FRAME_RATE_MS = 1000.0 / 60.0;
 const int RENDER_BLOCK_SIZE = 32;
@@ -27,7 +27,14 @@ const int MAX_RENDER_THREADS_SIZE = 256;
 
 int MainOpenGL::WIDTH = 768;
 int MainOpenGL::HEIGHT = 768;
+
 // ---------------------------------------------------------------------------------------------------------------------
+
+int currRowIndex, currColumnIndex;
+bool clockStart, clockEnd;
+std::chrono::time_point<std::chrono::steady_clock> renderTimeStart;
+// ---------------------------------------------------------------------------------------------------------------------
+
 void MainOpenGL::init()
 {
     //default_framebuffer = new Framebuffer(600, 600);
@@ -64,11 +71,17 @@ void MainOpenGL::init()
 
     cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));
 
-    CudaMesh* mesh = ObjDecoder::createMesh("../resources/monkey_high.obj");
+    glm::mat4 meshT = ObjDecoder::createTransformationMatrix(glm::vec3(0, 0.0f, -5.0f),
+                                                             glm::vec3( 0.0f, 180.0f, 0.0f),
+                                                             glm::vec3(1));
+    CudaMesh* mesh = ObjDecoder::createMesh("../resources/monkey_mid.obj", meshT);
     mesh->material = mat3;
     cudaScene->addObject(mesh);
 
-    CudaMesh* floor = ObjDecoder::createMesh("../resources/floor.obj");
+    glm::mat4 floorT = ObjDecoder::createTransformationMatrix(glm::vec3(0, -2.5f, -5.0f),
+                                                                glm::vec3( 0.0f, 0.0f, 0.0f),
+                                                                glm::vec3(10.0f, 0.2f, 10.0f));
+    CudaMesh* floor = ObjDecoder::createMesh("../resources/cube.obj", floorT);
     floor->material = mat2;
     cudaScene->addObject(floor);
 
@@ -102,6 +115,11 @@ void MainOpenGL::display(void)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(1.0, 0.5, 0.5, 1.0);
 
+    if (!clockStart) {
+        renderTimeStart = std::chrono::steady_clock::now();
+        clockStart = true;
+    }
+
     if (currRowIndex < cudaScene->height) {
         if (currColumnIndex < cudaScene->width) {
             int numThreadsToRun = std::min(cudaScene->width - currColumnIndex, MAX_RENDER_THREADS_SIZE);
@@ -110,6 +128,13 @@ void MainOpenGL::display(void)
         } else {
             currColumnIndex = 0;
             currRowIndex += RENDER_BLOCK_SIZE;
+        }
+    } else {
+        if (!clockEnd) {
+            auto renderTimeEnd = std::chrono::steady_clock::now();
+            std::chrono::duration<double> elapsed_seconds = renderTimeEnd - renderTimeStart;
+            std::cout << "\n\nElapsed time: " << elapsed_seconds.count() << "s\n";
+            clockEnd = true;
         }
     }
 

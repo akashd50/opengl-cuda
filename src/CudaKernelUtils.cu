@@ -383,9 +383,8 @@ __device__ bool checkHitOnMeshHelperNR(float3 &eye, float3 &ray, CudaMesh* mesh,
             curr = curr->right;
         }
     }
-    if (debug) {
-        printf("\nNum Hit Checked: Triangles(%d) | AABB(%d)\n", numTrianglesChecked, numAABBChecks);
-    }
+    if (debug) printf("\nNum Hit Checked: Triangles(%d) | AABB(%d)\n", numTrianglesChecked, numAABBChecks);
+
     stack->clean();
     free(stack);
     return tUpdated;
@@ -499,7 +498,7 @@ __device__ void bounceLightRay(float3 &ray, HitInfo &newHit, CudaThreadData &thr
         bounceLightRay(ray, newHit, threadData, lighting, index);
         //Calculate the lighting from all other lights here
         //getLighting(ray, newHit, threadData, lighting);
-        lighting = lighting * mat->reflective;
+        lighting = lighting * mat->albedo * mat->diffuse;
     }
 }
 
@@ -519,7 +518,7 @@ __device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData
     }else {
         CudaMaterial* mat = newHit.object->material;
         bounceLightRay(reflected, newHit, threadData, lighting, index);
-        lighting = lighting * mat->albedo;
+        lighting = lighting * mat->albedo * mat->diffuse;
     }
     //lighting = (lighting/((float)index + 1.0f)) * hitInfo.object->material->diffuse;
     lighting = lighting * hitInfo.object->material->diffuse;
@@ -618,14 +617,15 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  i
 
     float3 sampledColor = make_float3(0, 0, 0);
     float p = 0.0005f /* curand_normal(&threadData.randState)*/;
-    int numSamples = 1; //i.e. 8 * 4 = 32 or 1 * 4 = 4
-    for(int i=0; i<numSamples; i++) {
-        sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(p, p, 0), maxBounces, threadData);
-        sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(-p, -p, 0), maxBounces, threadData);
-        sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(-p, p, 0), maxBounces, threadData);
-        sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(p, -p, 0), maxBounces, threadData);
-    }
-    uchar4 color = toRGBA(sampledColor/((float)numSamples * 4.0f));
+    //int numSamples = 8; //i.e. 8 * 4 = 32 or 1 * 4 = 4
+    //for(int i=0; i<numSamples; i++) {
+    sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(p, p, 0), maxBounces, threadData);
+    sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(-p, -p, 0), maxBounces, threadData);
+    sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(-p, p, 0), maxBounces, threadData);
+    sampledColor = sampledColor + traceSingleRay(eye, ray + make_float3(p, -p, 0), maxBounces, threadData);
+    //}
+    //uchar4 color = toRGBA(sampledColor/((float)numSamples * 4.0f));
+    uchar4 color = toRGBA(sampledColor/4.0f);
 
 //    float3 cVal = traceSingleRay(eye, ray, maxBounces, threadData);
 //    uchar4 color = toRGBA(cVal);
