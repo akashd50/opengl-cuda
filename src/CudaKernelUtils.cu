@@ -11,6 +11,10 @@ __device__ __host__ uchar4 operator+(const uchar4 &a, const uchar4 &b) {
     return make_uchar4(a.x+b.x, a.y+b.y, a.z+b.z, a.w+b.z);
 }
 
+__device__ __host__ uchar4 operator/(const uchar4 &a, const float b) {
+    return make_uchar4(int(a.x/b), int(a.y/b), int(a.z/b), 255);
+}
+
 __device__ __host__ float3 operator*(const float3 &a, const float &b) {
     return make_float3(a.x*b, a.y*b, a.z*b);
 }
@@ -484,7 +488,7 @@ __device__ void getLighting(float3 &ray, HitInfo &hitInfo, CudaThreadData &threa
 }
 
 __device__ void bounceLightRay(float3 &ray, HitInfo &newHit, CudaThreadData &threadData, float3 &lighting, int &index) {
-    if (index >= 4) return;
+    if (index >= 6) return;
 
     newHit.reflected = normalize(getReflectedRay(ray, newHit.normal));
     ray = getReflectedDiffuseRay(newHit, threadData, true);
@@ -507,6 +511,10 @@ __device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData
 //        printf("\n\nCalculating Lighting for Hit(%d) T(%f) P(%f, %f, %f) | Normal(%f, %f, %f)\n", hitInfo.index, hitInfo.t,
 //               hitInfo.point.x, hitInfo.point.y, hitInfo.point.z, hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z);
 //    }
+    if (hitInfo.object->type == LIGHT) {
+        // May change this to include other light properties like intensity and stuff
+        return hitInfo.color;
+    }
 
     float3 lighting = make_float3(0, 0, 0);
     HitInfo newHit;
@@ -580,7 +588,7 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, int maxBounces, CudaThr
         }
     } else if (stack->size() == 1) {
         HitInfo curr = stack->top(); stack->pop();
-        color = color + curr.color;
+        color = color + calculateLighting(curr, threadData);
     }
 
     color.x = sqrt(color.x);
@@ -594,7 +602,7 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, int maxBounces, CudaThr
     return color;
 }
 
-__global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  int startRowIndex, int startColIndex)
+__global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  int startRowIndex, int startColIndex, int sampleIndex)
 {
     // blockIdx - index of block in grid
     // theadIdx - index of thread in block
@@ -603,7 +611,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  i
     int randIndex = wang_hash(x * y) % scene->width;
 
     curandState state;
-    curand_init (x*y, 0, 0, &state);
+    curand_init (x*y*(sampleIndex+2), 0, 0, &state);
 
     CudaThreadData threadData;
     threadData.debug = false;
@@ -611,7 +619,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  i
     threadData.randIndex = randIndex;
     threadData.scene = scene;
 
-    int maxBounces = 3;
+    int maxBounces = 2;
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, scene->width, scene->height) - eye;
 
@@ -629,7 +637,11 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  i
 
 //    float3 cVal = traceSingleRay(eye, ray, maxBounces, threadData);
 //    uchar4 color = toRGBA(cVal);
-
+    if (sampleIndex != 0) {
+        uchar4 ec;
+        surf2Dread(&ec, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
+        color = make_uchar4((color.x + ec.x)/2.0f, (color.y + ec.y)/2.0f, (color.z + ec.z)/2.0f, 255);
+    }
     surf2Dwrite(color, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
 }
 
@@ -654,7 +666,84 @@ __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, C
     printf("Overall NumTriangleHits(%lu) NumMeshHitChecks(%lu)\n", numOverallTriangleChecks, numMeshHitChecks);
     printf("Overall average triangle hits: (%f)\n", (float)numOverallTriangleChecks/(float)numMeshHitChecks);
 
+    uchar4 ec;
+    surf2Dread(&ec, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
+    printf("\nExisting color (%d, %d, %d, %d)\n", ec.x, ec.y, ec.z, ec.w);
+    printf("\nNew color (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
+    color = make_uchar4((color.x + ec.x)/2.0f, (color.y + ec.y)/2.0f, (color.z + ec.z)/2.0f, 255);
+    printf("\nCombined color (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
+
     surf2Dwrite(color, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
+}
+
+__device__ uchar4 getColorAt(cudaSurfaceObject_t image, int2 imageDim, int2 index) {
+    if (index.x < 0 || index.y < 0 || index.x >= imageDim.x || index.y >= imageDim.y) {
+        return make_uchar4(255, 255, 255, 255);
+    }
+    uchar4 color;
+    surf2Dread(&color, image, index.x * sizeof(uchar4), index.y, cudaBoundaryModeClamp);
+    return color;
+}
+
+__device__ uchar4* getPixelColors(cudaSurfaceObject_t image, int2 dims, int2 imageIndex, float* kernel, int kDim, int count) {
+    if (kDim % 2 == 0) return nullptr;
+
+    int half = kDim / 2;
+    auto colors = new uchar4[count != 0 ? count : kDim * kDim];
+    int colIndex = 0;
+    for(int i=0; i < kDim; i++) {
+        for(int j=0; j < kDim; j++) {
+            int index = i * kDim + j;
+            if (kernel[index] != 0.0) {
+                int xIndex = (imageIndex.x - half + j) % dims.x;
+                int yIndex = (imageIndex.y - half + i) % dims.y;
+                colors[colIndex++] = getColorAt(image, dims, make_int2(xIndex, yIndex));
+            }
+        }
+    }
+    return colors;
+}
+
+__global__ void kernel_denoise(cudaSurfaceObject_t image, int width, int height, int startRowIndex, int startColIndex) {
+    int x = startColIndex + (int)threadIdx.x;
+    int y = startRowIndex + (int)blockIdx.x;
+    //uchar4 colors[5];
+    //if (x > 0 && x < width-1 && y > 0 && y < height-1) {
+    curandState state;
+    curand_init (x*y, 0, 0, &state);
+    int numPixelsToSample = 5;
+    float kernel[] = {0.0f, 1.0f, 0.0f,
+                      1.0f, 1.0f, 1.0f,
+                      0.0f, 1.0f, 0.0f};
+    uchar4* colors = getPixelColors(image, make_int2(width, height), make_int2(x, y), kernel, 3, numPixelsToSample);
+        //+
+//        surf2Dread(&colors[0], image, (x) * sizeof(uchar4), y-1, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[1], image, (x-1) * sizeof(uchar4), y, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[2], image, (x) * sizeof(uchar4), y, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[3], image, (x+1) * sizeof(uchar4), y, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[4], image, (x) * sizeof(uchar4), y+1, cudaBoundaryModeClamp);
+
+//        surf2Dread(&colors[0], image, (x-1) * sizeof(uchar4), y-1, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[1], image, (x) * sizeof(uchar4), y-1, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[2], image, (x+1) * sizeof(uchar4), y-1, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[3], image, (x-1) * sizeof(uchar4), y, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[4], image, (x) * sizeof(uchar4), y, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[5], image, (x+1) * sizeof(uchar4), y, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[6], image, (x-1) * sizeof(uchar4), y+1, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[7], image, (x) * sizeof(uchar4), y+1, cudaBoundaryModeClamp);
+//        surf2Dread(&colors[8], image, (x+1) * sizeof(uchar4), y+1, cudaBoundaryModeClamp);
+
+    if (colors != nullptr) {
+        uchar4 color = colors[0];
+        for (int i=1; i<numPixelsToSample; i++) {
+            color.x = (color.x + colors[i].x)/2.0f;
+            color.y = (color.y + colors[i].y)/2.0f;
+            color.z = (color.z + colors[i].z)/2.0f;
+        }
+        surf2Dwrite(color, image, x * sizeof(uchar4), y, cudaBoundaryModeClamp);
+        free(colors);
+    }
+    //}
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -669,15 +758,9 @@ void CudaKernelUtils::initializeRenderSurface(Texture* texture) {
     cudaDeviceSetLimit(cudaLimitStackSize, stackLimit);
     size_t newHeapLimit = 33554432;
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, newHeapLimit);
-//    size_t getLimit;
-//    cudaDeviceGetLimit(&getLimit, cudaLimitStackSize);
-//    std::cout << "New Stack Size: " << getLimit << std::endl;
-
-
 
     struct cudaGraphicsResource *vbo_res;
     // register this texture with CUDA
-    //cudaGraphicsGLRegisterImage(&vbo_res, texture->getTextureId(),GL_TEXTURE_2D, cudaGraphicsMapFlagsReadOnly);
     check(cudaGraphicsGLRegisterImage(&vbo_res, texture->getTextureId(), GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore));
     check(cudaGraphicsMapResources(1, &vbo_res));
 
@@ -690,19 +773,19 @@ void CudaKernelUtils::initializeRenderSurface(Texture* texture) {
     viewCudaArrayResourceDesc.res.array.array = viewCudaArray;
 
     check(cudaCreateSurfaceObject(&viewCudaSurfaceObject, &viewCudaArrayResourceDesc));
-
-//    curandGenerator_t  randomGenerator;
-//    curandCreateGenerator(&randomGenerator, CURAND_RNG_QUASI_SOBOL32);
-//    curandSetPseudoRandomGeneratorSeed(randomGenerator, 1);
-
 }
 
-void CudaKernelUtils::renderScene(CudaScene* cudaScene, int blockSize, int numThreads, int startRowIndex, int startColIndex) {
-    kernel_traceRays<<<blockSize, numThreads>>>(CudaKernelUtils::viewCudaSurfaceObject, cudaScene, startRowIndex, startColIndex);
+void CudaKernelUtils::renderScene(CudaScene* cudaScene, int blockSize, int numThreads, int startRowIndex, int startColIndex, int sampleIndex) {
+    kernel_traceRays<<<blockSize, numThreads>>>(CudaKernelUtils::viewCudaSurfaceObject, cudaScene, startRowIndex, startColIndex, sampleIndex);
     check(cudaDeviceSynchronize());
     //test hits
 //    Bounds* test = new Bounds(0.5, -0.5, -0.5, 0.5, -2.0, -3.0);
 //    std::cout << "AABB HIT: " << checkHitOnAABB(make_float3(0.0, 0.0, 0.0), make_float3(0.0, 0.0, -1.0), test) << std::endl;
+}
+
+void CudaKernelUtils::runDenoiseKernel(CudaScene* cudaScene, int blockSize, int numThreads, int startRowIndex, int startColIndex) {
+    kernel_denoise<<<blockSize, numThreads>>>(CudaKernelUtils::viewCudaSurfaceObject, cudaScene->width, cudaScene->height, startRowIndex, startColIndex);
+    check(cudaDeviceSynchronize());
 }
 
 void CudaKernelUtils::onClick(int x, int y, CudaScene* cudaScene) {

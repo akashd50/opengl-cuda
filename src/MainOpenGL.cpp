@@ -24,23 +24,20 @@ const char* MainOpenGL::WINDOW_TITLE = "Raytracing with Cuda";
 const double MainOpenGL::FRAME_RATE_MS = 1000.0 / 60.0;
 const int RENDER_BLOCK_SIZE = 32;
 const int MAX_RENDER_THREADS_SIZE = 256;
+const int MAX_SAMPLES_PER_PIXEL = 0;
 
 int MainOpenGL::WIDTH = 768;
 int MainOpenGL::HEIGHT = 768;
 
 // ---------------------------------------------------------------------------------------------------------------------
-
-int currRowIndex, currColumnIndex;
-bool clockStart, clockEnd;
+int currRowIndex, currColumnIndex, sampleIndex;
+bool clockStart, clockEnd, runDenoiseKernel;
 std::chrono::time_point<std::chrono::steady_clock> renderTimeStart;
 // ---------------------------------------------------------------------------------------------------------------------
 
 void MainOpenGL::init()
 {
-    //default_framebuffer = new Framebuffer(600, 600);
-    //single_color_shader = new Shader("shaders/single_color_vs.glsl", "shaders/single_color_fs.glsl");
     texture_shader = new Shader("../shaders/texture_vs.glsl", "../shaders/texture_fs.glsl");
-    //test_texture = new Texture("../resources/scr1.bmp");
     test_texture = new Texture(MainOpenGL::WIDTH, MainOpenGL::HEIGHT, GL_RGBA);
 
     quad = new Quad();
@@ -56,32 +53,32 @@ void MainOpenGL::init()
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.6, 0.1));
     mat1->reflective = make_float3(0.9, 0.9, 0.9);
-    mat1->albedo = 0.5;
+    mat1->albedo = 0.6;
     mat1->roughness = 0.01f;
 
     auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.6, 0.6, 0.6));
     mat2->reflective = make_float3(0.2, 0.2, 0.2);
-    mat2->albedo = 0.5;
+    mat2->albedo = 0.6;
     mat2->roughness = 1.0f;
 
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.2, 0.6));
     mat3->reflective = make_float3(0.2, 0.2, 0.2);
-    mat3->albedo = 0.5;
+    mat3->albedo = 0.6;
     mat3->roughness = 1.0f;
 
-    cudaScene->addObject(new CudaSphere(make_float3(3.0, 0.0, -7.0), 2.0, mat1));
+    cudaScene->addObject(new CudaSphere(make_float3(2.0, -1.0, -8.0), 2.0, mat1));
 
-    glm::mat4 meshT = ObjDecoder::createTransformationMatrix(glm::vec3(0, 0.0f, -5.0f),
+    glm::mat4 meshT = ObjDecoder::createTransformationMatrix(glm::vec3(-1.0, 0.0f, -7.0f),
                                                              glm::vec3( 0.0f, 180.0f, 0.0f),
                                                              glm::vec3(1));
     CudaMesh* mesh = ObjDecoder::createMesh("../resources/monkey_mid.obj", meshT);
     mesh->material = mat3;
     cudaScene->addObject(mesh);
 
-    glm::mat4 floorT = ObjDecoder::createTransformationMatrix(glm::vec3(0, -2.5f, -5.0f),
+    glm::mat4 floorT = ObjDecoder::createTransformationMatrix(glm::vec3(0, 0.0f, -9.0f),
                                                                 glm::vec3( 0.0f, 0.0f, 0.0f),
-                                                                glm::vec3(10.0f, 0.2f, 10.0f));
-    CudaMesh* floor = ObjDecoder::createMesh("../resources/cube.obj", floorT);
+                                                                glm::vec3(5.0f, 4.0f, 10.0f));
+    CudaMesh* floor = ObjDecoder::createMesh("../resources/room.obj", floorT);
     floor->material = mat2;
     cudaScene->addObject(floor);
 
@@ -94,6 +91,9 @@ void MainOpenGL::init()
 
     currRowIndex = 0;
     currColumnIndex = 0;
+    sampleIndex = 0;
+    clockStart = false;
+    clockEnd = false;
 
     std::cout << "Size of int: " << sizeof(int) << std::endl;
     std::cout << "Size of pointer: " << sizeof(CudaMaterial*) << std::endl;
@@ -115,25 +115,36 @@ void MainOpenGL::display(void)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(1.0, 0.5, 0.5, 1.0);
 
-    if (!clockStart) {
-        renderTimeStart = std::chrono::steady_clock::now();
-        clockStart = true;
-    }
 
     if (currRowIndex < cudaScene->height) {
+        if (!clockStart) {
+            renderTimeStart = std::chrono::steady_clock::now();
+            clockStart = true;
+        }
+
         if (currColumnIndex < cudaScene->width) {
             int numThreadsToRun = std::min(cudaScene->width - currColumnIndex, MAX_RENDER_THREADS_SIZE);
-            cudaUtils->renderScene(allocatedScene, RENDER_BLOCK_SIZE, numThreadsToRun, currRowIndex, currColumnIndex);
+            if (runDenoiseKernel) {
+                cudaUtils->runDenoiseKernel(cudaScene, RENDER_BLOCK_SIZE, numThreadsToRun, currRowIndex, currColumnIndex);
+            } else {
+                cudaUtils->renderScene(allocatedScene, RENDER_BLOCK_SIZE, numThreadsToRun, currRowIndex, currColumnIndex, sampleIndex);
+            }
             currColumnIndex += MAX_RENDER_THREADS_SIZE;
         } else {
             currColumnIndex = 0;
             currRowIndex += RENDER_BLOCK_SIZE;
         }
     } else {
+        if (sampleIndex < MAX_SAMPLES_PER_PIXEL) {
+            sampleIndex++;
+            currColumnIndex = 0;
+            currRowIndex = 0;
+            std::cout << "Next Samples Index.. " << sampleIndex << std::endl;
+        }
         if (!clockEnd) {
             auto renderTimeEnd = std::chrono::steady_clock::now();
             std::chrono::duration<double> elapsed_seconds = renderTimeEnd - renderTimeStart;
-            std::cout << "\n\nElapsed time: " << elapsed_seconds.count() << "s\n";
+            std::cout << "\nElapsed time: " << elapsed_seconds.count() << "s\n";
             clockEnd = true;
         }
     }
@@ -150,11 +161,29 @@ void MainOpenGL::display(void)
 void MainOpenGL::keyboard(unsigned char key, int x, int y)
 {
     switch (key) {
-    case 033: // Escape Key
-    case 'q': case 'Q':
-        cleanCudaScene(allocatedScene);
-        exit(EXIT_SUCCESS);
-        break;
+        case 'r':
+        case 'R':
+            std::cout << "Running Another Sample..." << std::endl;
+            clockStart = false;
+            clockEnd = false;
+            sampleIndex++;
+            currRowIndex = 0;
+            currColumnIndex = 0;
+            runDenoiseKernel = false;
+            break;
+        case 'd':
+        case 'D':
+            std::cout << "Running DeNoiser..." << std::endl;
+            currRowIndex = 0;
+            currColumnIndex = 0;
+            runDenoiseKernel = true;
+            //cudaUtils->runDenoiseKernel(allocatedScene, WIDTH, HEIGHT, 0, 0);
+            break;
+        case 033: // Escape Key
+        case 'q': case 'Q':
+            cleanCudaScene(allocatedScene);
+            exit(EXIT_SUCCESS);
+            break;
     }
 }
 
