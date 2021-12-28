@@ -33,9 +33,12 @@ BVHBinaryNode* allocateBVH(BVHBinaryNode* node) {
         return node;
     }
 
+    auto left = allocateBVH(node->left);
+    auto right = allocateBVH(node->right);
+
     BVHBinaryNode tempNode = BVHBinaryNode();
-    tempNode.left = allocateBVH(node->left);
-    tempNode.right = allocateBVH(node->right);
+    tempNode.left = left;
+    tempNode.right = right;
     if (node->bounds != nullptr) {
         tempNode.bounds = cudaWrite<Bounds>(node->bounds, 1);
     }

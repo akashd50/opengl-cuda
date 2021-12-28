@@ -61,7 +61,8 @@ public:
     explicit CudaMesh(CudaTriangle* _triangles);
     void addTriangle(CudaTriangle _object);
     void finalize();
-    BVHBinaryNode* createMeshTree(std::vector<CudaTriangle>* triangles, std::vector<int>* indices, BVHBinaryNode* node);
+    BVHBinaryNode* createMeshTree(std::vector<CudaTriangle>* triangles, std::vector<int>* indices, BVHBinaryNode* node, int depth);
+    BVHBinaryNode* createMeshTree2(std::vector<CudaTriangle>* triangles, std::vector<int>* indices, BVHBinaryNode* node, int depth);
     static CudaMesh* newHostMesh();
 };
 

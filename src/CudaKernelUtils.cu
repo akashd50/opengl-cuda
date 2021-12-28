@@ -321,12 +321,18 @@ __device__ bool checkHitOnNodeTriangles(float3 &eye, float3 &ray, BVHBinaryNode*
     return tUpdated;
 }
 
+__device__ unsigned long numMeshHitChecks = 0;
+__device__ unsigned long numOverallTriangleChecks = 0;
+
 __device__ bool checkHitOnMeshHelperNR(float3 &eye, float3 &ray, CudaMesh* mesh, HitInfo &hitInfo, bool debug) {
     if (debug) {
         printf("\n\nStarting to check hit on Mesh\n");
     }
+
     int numTrianglesChecked = 0;
     int numAABBChecks = 0;
+    numMeshHitChecks++;
+
     auto stack = new Stack<BVHBinaryNode*>();
     if (!stack->init()) return false;
 //    if (debug) {
@@ -357,6 +363,7 @@ __device__ bool checkHitOnMeshHelperNR(float3 &eye, float3 &ray, CudaMesh* mesh,
             if (currT.minT != MIN_T && currT.maxT != MAX_T
             && currT.minT <= hitInfo.t && currT.maxT >= 0) {
                 numTrianglesChecked += curr->numObjects;
+                numOverallTriangleChecks += curr->numObjects;
                 if (checkHitOnNodeTriangles(eye, ray, curr, mesh, hitInfo, debug)) {
                     tUpdated = true;
                 }
@@ -605,7 +612,7 @@ __global__ void kernel_traceRays(cudaSurfaceObject_t image, CudaScene* scene,  i
     threadData.randIndex = randIndex;
     threadData.scene = scene;
 
-    int maxBounces = 4;
+    int maxBounces = 3;
     float3 eye = make_float3(0.0, 0.0, 0.0);
     float3 ray = cast_ray(x, y, scene->width, scene->height) - eye;
 
@@ -644,6 +651,9 @@ __global__ void kernel_traceSingleRay(cudaSurfaceObject_t image, int x, int y, C
     printf("\n\nRay (%f, %f, %f)\n", ray.x, ray.y, ray.z);
     uchar4 color = toRGBA(traceSingleRay(eye, ray, maxBounces, threadData));
     printf("Final Color: (%d, %d, %d, %d)\n", color.x, color.y, color.z, color.w);
+    printf("Overall NumTriangleHits(%lu) NumMeshHitChecks(%lu)\n", numOverallTriangleChecks, numMeshHitChecks);
+    printf("Overall average triangle hits: (%f)\n", (float)numOverallTriangleChecks/(float)numMeshHitChecks);
+
     surf2Dwrite(color, image, x * sizeof(uchar4), scene->height - y, cudaBoundaryModeClamp);
 }
 

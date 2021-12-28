@@ -44,13 +44,13 @@ public:
     T* stack;
     int pointer;
     __device__ bool init() {
-        stack = (T*)malloc(15 * sizeof(T));
+        stack = (T*)malloc(25 * sizeof(T));
         pointer = 0;
         return stack != NULL;
     }
 
     __device__ void push(T val) {
-        if (pointer >= 15) {
+        if (pointer >= 25) {
             printf("Stack full\n");
         }
         stack[pointer++] = val;

@@ -6,8 +6,8 @@ float3 vec3ToFloat3(glm::vec3 vec) {
     return make_float3(vec.x, vec.y, vec.z);
 }
 
-Bounds* getNewBounds(std::vector<CudaTriangle>* triangles, std::vector<int>* indices) {
-    auto b = new Bounds();
+Bounds* updateBounds(std::vector<CudaTriangle>* triangles, std::vector<int>* indices, Bounds* b) {
+    b->reset();
     for(int index : *indices) {
         CudaTriangle t = triangles->at(index);
         float maxX = std::fmax(std::fmax(t.a.x, t.b.x), t.c.x);
@@ -40,6 +40,17 @@ bool isTriangleInBounds(CudaTriangle* triangle, Bounds* bounds) {
     return isFloat3InBounds(triangle->a, bounds)
            && isFloat3InBounds(triangle->b, bounds)
            && isFloat3InBounds(triangle->c, bounds);
+}
+
+float3 getTrianglePosition(float3 a, float3 b, float3 c) {
+    return make_float3((a.x + b.x + c.x)/3.0f, (a.y + b.y + c.y)/3.0f, (a.z + b.z + c.z)/3.0f);
+}
+
+bool isTriangleCentroidInBounds(CudaTriangle* triangle, Bounds* bounds) {
+    float3 pos = getTrianglePosition(triangle->a, triangle->b, triangle->c);
+    return (pos.x >= bounds->left && pos.x <= bounds->right) &&
+           (pos.y >= bounds->bottom && pos.y <= bounds->top) &&
+           (pos.z >= bounds->back && pos.z <= bounds->front);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -88,7 +99,8 @@ void CudaMesh::addTriangle(CudaTriangle _object) {
 void CudaMesh::finalize() {
     auto allIndices = new std::vector<int>();
     for (int i=0; i<hostTriangles->size(); i++) allIndices->push_back(i);
-    bvhRoot = createMeshTree(hostTriangles, allIndices, bvhRoot);
+    maxBVHDepth = 0;
+    bvhRoot = createMeshTree2(hostTriangles, allIndices, bvhRoot, 0);
 }
 
 CudaMesh* CudaMesh::newHostMesh() {
@@ -100,7 +112,8 @@ CudaMesh* CudaMesh::newHostMesh() {
     return mesh;
 }
 
-BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangles, std::vector<int>* indices, BVHBinaryNode* node) {
+BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangles, std::vector<int>* indices, BVHBinaryNode* node, int depth) {
+    maxBVHDepth = std::max(depth, maxBVHDepth);
     int len = indices->size();
     if (len <= 5) {
         int* localIndices = new int[len];
@@ -151,14 +164,79 @@ BVHBinaryNode* CudaMesh::createMeshTree(std::vector<CudaTriangle>* localTriangle
         }
     }
 
-    delete node->left->bounds;
-    delete node->right->bounds;
-    node->left->bounds = getNewBounds(localTriangles, leftTriangles);
-    node->right->bounds = getNewBounds(localTriangles, rightTriangles);
+    node->left->bounds = updateBounds(localTriangles, leftTriangles, node->left->bounds);
+    node->right->bounds = updateBounds(localTriangles, rightTriangles, node->right->bounds);
 
-    node->left = createMeshTree(localTriangles, leftTriangles, node->left);
+    node->left = createMeshTree(localTriangles, leftTriangles, node->left, depth + 1);
     delete leftTriangles;
-    node->right = createMeshTree(localTriangles, rightTriangles, node->right);
+    node->right = createMeshTree(localTriangles, rightTriangles, node->right, depth + 1);
+    delete rightTriangles;
+
+    node->objectsIndex = currNodeIndices->data();
+    node->numObjects = currNodeIndices->size();
+    return node;
+}
+
+BVHBinaryNode* CudaMesh::createMeshTree2(std::vector<CudaTriangle>* localTriangles, std::vector<int>* indices, BVHBinaryNode* node, int depth) {
+    maxBVHDepth = std::max(depth, maxBVHDepth);
+    int len = indices->size();
+    if (len <= 30 || depth >= 20) {
+        int* localIndices = new int[len];
+        for (int i=0; i<len; i++) { localIndices[i] = indices->at(i); }
+        node->objectsIndex = localIndices;
+        node->numObjects = len;
+        return node;
+    }
+
+    auto leftTriangles = new std::vector<int>();
+    auto rightTriangles = new std::vector<int>();
+
+    //bool xDiv, yDiv, zDiv;
+    auto nb = *node->bounds;
+    float xLen = nb.right - nb.left;
+    float yLen = nb.top - nb.bottom;
+    float zLen = nb.right - nb.left;
+    if (xLen >= yLen && xLen >= zLen) {
+        //xDiv = true;
+        float mid = (nb.left + nb.right)/2;
+        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, mid, nb.front, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, mid, nb.right, nb.front, nb.back));
+    }
+    else if (yLen >= xLen && yLen >= zLen) {
+        //yDiv = true;
+        float mid = (nb.top + nb.bottom)/2;
+        node->left = new BVHBinaryNode(new Bounds(mid, nb.bottom, nb.left, nb.right, nb.front, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, mid, nb.left, nb.right, nb.front, nb.back));
+    }
+    else {
+        //if (zLen >= yLen && zLen >= xLen) {
+        //zDiv = true;
+        float mid = (nb.front + nb.back)/2;
+        node->left = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, mid, nb.back));
+        node->right = new BVHBinaryNode(new Bounds(nb.top, nb.bottom, nb.left, nb.right, nb.front, mid));
+    }
+
+    auto currNodeIndices = new std::vector<int>();
+    for (int index : *indices) {
+        //divide along the axis with max length
+        CudaTriangle t = localTriangles->at(index);
+        if (isTriangleCentroidInBounds(&t, node->left->bounds)) {
+            leftTriangles->push_back(index);
+        }
+        else if (isTriangleCentroidInBounds(&t, node->right->bounds)) {
+            rightTriangles->push_back(index);
+        }
+        else {
+            currNodeIndices->push_back(index);
+        }
+    }
+
+    node->left->bounds = updateBounds(localTriangles, leftTriangles, node->left->bounds);
+    node->right->bounds = updateBounds(localTriangles, rightTriangles, node->right->bounds);
+
+    node->left = createMeshTree2(localTriangles, leftTriangles, node->left, depth + 1);
+    delete leftTriangles;
+    node->right = createMeshTree2(localTriangles, rightTriangles, node->right, depth + 1);
     delete rightTriangles;
 
     node->objectsIndex = currNodeIndices->data();
