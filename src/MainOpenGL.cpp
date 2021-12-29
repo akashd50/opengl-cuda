@@ -24,7 +24,7 @@ const char* MainOpenGL::WINDOW_TITLE = "Raytracing with Cuda";
 const double MainOpenGL::FRAME_RATE_MS = 1000.0 / 60.0;
 const int RENDER_BLOCK_SIZE = 32;
 const int MAX_RENDER_THREADS_SIZE = 256;
-const int MAX_SAMPLES_PER_PIXEL = 0;
+const int MAX_SAMPLES_PER_PIXEL = 64;
 
 int MainOpenGL::WIDTH = 768;
 int MainOpenGL::HEIGHT = 768;
@@ -53,7 +53,7 @@ void MainOpenGL::init()
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.6, 0.1));
     mat1->reflective = make_float3(0.9, 0.9, 0.9);
-    mat1->albedo = 0.6;
+    mat1->albedo = 0.9;
     mat1->roughness = 0.01f;
 
     auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.6, 0.6, 0.6));
@@ -78,7 +78,7 @@ void MainOpenGL::init()
     glm::mat4 floorT = ObjDecoder::createTransformationMatrix(glm::vec3(0, 0.0f, -9.0f),
                                                                 glm::vec3( 0.0f, 0.0f, 0.0f),
                                                                 glm::vec3(5.0f, 4.0f, 10.0f));
-    CudaMesh* floor = ObjDecoder::createMesh("../resources/room.obj", floorT);
+    CudaMesh* floor = ObjDecoder::createMesh("../resources/room_open_roof.obj", floorT);
     floor->material = mat2;
     cudaScene->addObject(floor);
 
@@ -125,7 +125,7 @@ void MainOpenGL::display(void)
         if (currColumnIndex < cudaScene->width) {
             int numThreadsToRun = std::min(cudaScene->width - currColumnIndex, MAX_RENDER_THREADS_SIZE);
             if (runDenoiseKernel) {
-                cudaUtils->runDenoiseKernel(cudaScene, RENDER_BLOCK_SIZE, numThreadsToRun, currRowIndex, currColumnIndex);
+                cudaUtils->runDenoiseKernel(cudaScene, RENDER_BLOCK_SIZE, numThreadsToRun, currRowIndex, currColumnIndex, sampleIndex);
             } else {
                 cudaUtils->renderScene(allocatedScene, RENDER_BLOCK_SIZE, numThreadsToRun, currRowIndex, currColumnIndex, sampleIndex);
             }
@@ -137,6 +137,7 @@ void MainOpenGL::display(void)
     } else {
         if (sampleIndex < MAX_SAMPLES_PER_PIXEL) {
             sampleIndex++;
+            //runDenoiseKernel = !runDenoiseKernel;
             currColumnIndex = 0;
             currRowIndex = 0;
             std::cout << "Next Samples Index.. " << sampleIndex << std::endl;

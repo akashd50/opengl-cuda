@@ -97,7 +97,7 @@ public:
     ~CudaKernelUtils();
     void initializeRenderSurface(Texture* texture);
     void renderScene(CudaScene* cudaScene, int blockSize, int numThreads, int startRowIndex, int startColIndex, int sampleIndex);
-    void runDenoiseKernel(CudaScene* cudaScene, int blockSize, int numThreads, int startRowIndex, int startColIndex);
+    void runDenoiseKernel(CudaScene* cudaScene, int blockSize, int numThreads, int startRowIndex, int startColIndex, int sampleIndex);
     void onClick(int x, int y, CudaScene* cudaScene);
     void deviceInformation();
 };
