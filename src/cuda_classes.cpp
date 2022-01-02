@@ -70,9 +70,20 @@ CudaMaterial::CudaMaterial(float3 _ambient, float3 _diffuse, float3 _specular, f
         reflective(_reflective), transmissive(_transmissive), refraction(_refraction), roughness(_roughness) {}
 
 //----------------------------------------------------------------------------------------------------------------------
-CudaRTObject::CudaRTObject() {}
-CudaRTObject::CudaRTObject(int _type) : type(_type) {}
-CudaRTObject::CudaRTObject(int _type, CudaMaterial* _material) : type(_type), material(_material) {}
+
+int CudaRTObject::OBJECT_ID = 0;
+
+CudaRTObject::CudaRTObject()
+: id(CudaRTObject::OBJECT_ID++), material(nullptr) {}
+
+CudaRTObject::CudaRTObject(int _type)
+: type(_type), id(CudaRTObject::OBJECT_ID++), material(nullptr) {}
+
+CudaRTObject::CudaRTObject(int _type, CudaMaterial* _material)
+: type(_type), material(_material), id(CudaRTObject::OBJECT_ID++) {}
+
+CudaRTObject::CudaRTObject(int _type, CudaMaterial* _material, float3 _position)
+: type(_type), material(_material), position(_position), id(CudaRTObject::OBJECT_ID++) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -80,14 +91,17 @@ CudaTriangle::CudaTriangle(float3 _a, float3 _b, float3 _c): a(_a), b(_b), c(_c)
 CudaTriangle::CudaTriangle(float3 _a, float3 _b, float3 _c, int _index): a(_a), b(_b), c(_c), index(_index) {}
 
 //----------------------------------------------------------------------------------------------------------------------
-CudaSphere::CudaSphere(float3 _position, float _radius): CudaRTObject(SPHERE, nullptr),
-position(_position), radius(_radius) {}
-CudaSphere::CudaSphere(float3 _position, float _radius, CudaMaterial* _material): CudaRTObject(SPHERE, _material),
-position(_position), radius(_radius) {}
+
+CudaSphere::CudaSphere(float3 _position, float _radius):
+CudaRTObject(SPHERE, nullptr, _position), radius(_radius) {}
+
+CudaSphere::CudaSphere(float3 _position, float _radius, CudaMaterial* _material):
+CudaRTObject(SPHERE, _material, _position), radius(_radius) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
 CudaMesh::CudaMesh(): CudaRTObject(MESH) {}
+
 CudaMesh::CudaMesh(CudaTriangle* _triangles): CudaRTObject(MESH), triangles(_triangles) {}
 
 void CudaMesh::addTriangle(CudaTriangle _object) {
@@ -101,6 +115,9 @@ void CudaMesh::finalize() {
     for (int i=0; i<hostTriangles->size(); i++) allIndices->push_back(i);
     maxBVHDepth = 0;
     bvhRoot = createMeshTree2(hostTriangles, allIndices, bvhRoot, 0);
+    dimensions = make_float3(bvhRoot->bounds->right - bvhRoot->bounds->left,
+                             bvhRoot->bounds->top - bvhRoot->bounds->bottom,
+                             bvhRoot->bounds->front - bvhRoot->bounds->back);
 }
 
 CudaMesh* CudaMesh::newHostMesh() {
@@ -240,24 +257,36 @@ BVHBinaryNode* CudaMesh::createMeshTree2(std::vector<CudaTriangle>* localTriangl
 
 //----------------------------------------------------------------------------------------------------------------------
 
-CudaLight::CudaLight(): CudaRTObject() {}
-CudaLight::CudaLight(int _lightType): CudaRTObject(LIGHT), lightType(_lightType) {}
-CudaLight::CudaLight(int _lightType, float3 _color): CudaRTObject(LIGHT), lightType(_lightType) {}
+CudaLight::CudaLight(): CudaRTObject(), intensity(1.0f) {}
+
+CudaLight::CudaLight(int _lightType): CudaRTObject(LIGHT), lightType(_lightType), intensity(1.0f) {}
+
+CudaLight::CudaLight(int _lightType, float3 _color): CudaRTObject(LIGHT), lightType(_lightType), intensity(1.0f) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
 CudaSkyboxLight::CudaSkyboxLight(): CudaLight(SKYBOX_LIGHT) {}
+
 CudaSkyboxLight::CudaSkyboxLight(CudaSphere* _sphere): CudaLight(SKYBOX_LIGHT), sphere(_sphere) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
-CudaPointLight::CudaPointLight(float3 _position): CudaLight(POINT_LIGHT),
-position(_position) {}
-CudaPointLight::CudaPointLight(float3 _position, float3 _color): CudaLight(POINT_LIGHT), position(_position) {}
+CudaPointLight::CudaPointLight(float3 _position)
+: CudaLight(POINT_LIGHT), position(_position) {}
+
+CudaPointLight::CudaPointLight(float3 _position, float3 _color)
+: CudaLight(POINT_LIGHT), position(_position) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 
-CudaMeshLight::CudaMeshLight(): CudaLight(MESH_LIGHT) {}
+CudaMeshLight::CudaMeshLight()
+: CudaLight(MESH_LIGHT), mesh(nullptr) {}
+
+CudaMeshLight::CudaMeshLight(CudaMesh* _mesh)
+: CudaLight(MESH_LIGHT), mesh(_mesh) {}
+
+CudaMeshLight::CudaMeshLight(CudaMesh* _mesh, float3 _color)
+: CudaLight(MESH_LIGHT), mesh(_mesh), color(_color) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 

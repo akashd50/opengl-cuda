@@ -28,8 +28,10 @@ public:
     CudaRTObject* object;
     float t;
     float3 point, normal, reflected, color;
-    int index;
+    int objectId;
     __device__ HitInfo(): t(MAX_T) {}
+    __device__ HitInfo(HitInfo &hitInfo): t(hitInfo.t), object(hitInfo.object), point(hitInfo.point),
+    normal(hitInfo.normal), reflected(hitInfo.reflected), color(hitInfo.color), objectId(-1) {}
     __device__ HitInfo(CudaRTObject* _object, float _t) : object(_object), t(_t) {}
     __device__ bool isHit() {
         return t != MAX_T;

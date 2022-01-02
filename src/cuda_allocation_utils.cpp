@@ -69,8 +69,9 @@ CudaRTObject* allocateCudaObject(CudaRTObject* object) {
             CudaMesh tempMesh(cudaTrianglePtr);
             tempMesh.numTriangles = mesh->numTriangles;
             tempMesh.material = matPtr;
+            tempMesh.position = mesh->position;
             tempMesh.bvhRoot = allocateBVH(mesh->bvhRoot);
-
+            tempMesh.dimensions = mesh->dimensions;
             return cudaWrite<CudaMesh>(&tempMesh, 1);
         }
     }
@@ -82,10 +83,17 @@ CudaRTObject* allocateCudaLight(CudaRTObject* light) {
         case SKYBOX_LIGHT: {
             auto skyboxLight = (CudaSkyboxLight*)light;
             CudaSkyboxLight tempLight((CudaSphere*)allocateCudaObject(skyboxLight->sphere));
+            tempLight.intensity = skyboxLight->intensity;
             return cudaWrite<CudaSkyboxLight>(&tempLight, 1);
         }
         case POINT_LIGHT: {
             return nullptr;
+        }
+        case MESH_LIGHT: {
+            auto meshLight = (CudaMeshLight*)light;
+            CudaMeshLight tempLight((CudaMesh*)allocateCudaObject(meshLight->mesh), meshLight->color);
+            tempLight.intensity = meshLight->intensity;
+            return cudaWrite<CudaMeshLight>(&tempLight, 1);
         }
     }
     return nullptr;

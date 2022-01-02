@@ -52,21 +52,28 @@ void MainOpenGL::init()
     cudaScene->addLight(new CudaSkyboxLight(new CudaSphere(make_float3(0.0, 0.0, 0.0), 50.0)));
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.6, 0.1));
-    mat1->reflective = make_float3(0.9, 0.9, 0.9);
-    mat1->albedo = 0.9;
-    mat1->roughness = 0.01f;
+    mat1->reflective = make_float3(0.2, 0.2, 0.2);
+    mat1->albedo = 0.8;
+    mat1->roughness = 0.8f;
 
     auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.6, 0.6, 0.6));
-    mat2->reflective = make_float3(0.2, 0.2, 0.2);
-    mat2->albedo = 0.6;
-    mat2->roughness = 1.0f;
+    mat2->reflective = make_float3(0.3, 0.3, 0.3);
+    mat2->albedo = 0.8;
+    mat2->roughness = 0.5f;
 
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.2, 0.6));
     mat3->reflective = make_float3(0.2, 0.2, 0.2);
-    mat3->albedo = 0.6;
+    mat3->albedo = 0.8;
     mat3->roughness = 1.0f;
 
     cudaScene->addObject(new CudaSphere(make_float3(2.0, -1.0, -8.0), 2.0, mat1));
+    glm::mat4 meshLightT = ObjDecoder::createTransformationMatrix(glm::vec3(0.0, 3.0f, -5.0f),
+                                                             glm::vec3( 0.0f, 0.0f, 0.0f),
+                                                             glm::vec3(1));
+    auto meshLightObj = ObjDecoder::createMesh("../resources/cube.obj", meshLightT);
+    auto meshLight = new CudaMeshLight(meshLightObj, make_float3(0.0, 1.0, 1.0));
+    meshLight->intensity = 2.5f;
+    cudaScene->addLight(meshLight);
 
     glm::mat4 meshT = ObjDecoder::createTransformationMatrix(glm::vec3(-1.0, 0.0f, -7.0f),
                                                              glm::vec3( 0.0f, 180.0f, 0.0f),
@@ -75,10 +82,14 @@ void MainOpenGL::init()
     mesh->material = mat3;
     cudaScene->addObject(mesh);
 
-    glm::mat4 floorT = ObjDecoder::createTransformationMatrix(glm::vec3(0, 0.0f, -9.0f),
+//    glm::mat4 floorT = ObjDecoder::createTransformationMatrix(glm::vec3(0, 0.0f, -9.0f),
+//                                                              glm::vec3( 0.0f, 0.0f, 0.0f),
+//                                                              glm::vec3(5.0f, 4.0f, 10.0f));
+//
+    glm::mat4 floorT = ObjDecoder::createTransformationMatrix(glm::vec3(0, -3.2f, 0.0f),
                                                                 glm::vec3( 0.0f, 0.0f, 0.0f),
-                                                                glm::vec3(5.0f, 4.0f, 10.0f));
-    CudaMesh* floor = ObjDecoder::createMesh("../resources/room_open_roof.obj", floorT);
+                                                                glm::vec3(10.0f, 0.2f, 10.0f));
+    CudaMesh* floor = ObjDecoder::createMesh("../resources/room_closed.obj", floorT);
     floor->material = mat2;
     cudaScene->addObject(floor);
 

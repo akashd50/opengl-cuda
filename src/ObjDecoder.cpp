@@ -25,6 +25,7 @@ glm::mat4 ObjDecoder::createTransformationMatrix(glm::vec3 translation, glm::vec
 CudaMesh* ObjDecoder::createMesh(const std::string& file, glm::mat4 transformationMatrix) {
     CudaMesh* mesh = CudaMesh::newHostMesh();
     mesh->numTriangles = 0;
+    mesh->position = make_float3(0, 0, 0);
     BVHBinaryNode* root = mesh->bvhRoot;
     RawData rawData = readFile(file);
     for (int i = 0; i < rawData.faceConfiguration->size(); i++) {
@@ -33,6 +34,10 @@ CudaMesh* ObjDecoder::createMesh(const std::string& file, glm::mat4 transformati
         float3 v2 = applyTransformations(rawData.vertices->at(curr.v2), transformationMatrix);
         float3 v3 = applyTransformations(rawData.vertices->at(curr.v3), transformationMatrix);
         mesh->addTriangle(CudaTriangle(v1, v2, v3));
+
+        mesh->position.x += (v1.x + v2.x + v3.x)/3.0f;
+        mesh->position.y += (v1.y + v2.y + v3.y)/3.0f;
+        mesh->position.z += (v1.z + v2.z + v3.z)/3.0f;
 
         float maxX = std::fmax(std::fmax(v1.x, v2.x), v3.x);
         float minX = std::fmin(std::fmin(v1.x, v2.x), v3.x);
@@ -47,6 +52,9 @@ CudaMesh* ObjDecoder::createMesh(const std::string& file, glm::mat4 transformati
         root->bounds->front = std::fmax(maxZ, root->bounds->front);
         root->bounds->back = std::fmin(minZ, root->bounds->back);
     }
+    mesh->position.x = mesh->position.x/(float)rawData.faceConfiguration->size();
+    mesh->position.y = mesh->position.y/(float)rawData.faceConfiguration->size();
+    mesh->position.z = mesh->position.z/(float)rawData.faceConfiguration->size();
 
     std::cout << "End of Loading... - " << file << "\n";
 

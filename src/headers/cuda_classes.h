@@ -31,11 +31,14 @@ public:
 
 class CudaRTObject {
 public:
-    int type;
+    static int OBJECT_ID;
+    int id, type;
     CudaMaterial* material;
+    float3 position;
     CudaRTObject();
     explicit CudaRTObject(int _type);
     CudaRTObject(int _type, CudaMaterial* _material);
+    CudaRTObject(int _type, CudaMaterial* _material, float3 _position);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -55,6 +58,7 @@ public:
     std::vector<CudaTriangle>* hostTriangles;
     CudaTriangle* triangles;
     int numTriangles, maxBVHDepth;
+    float3 dimensions;
     BVHBinaryNode* bvhRoot;
 
     CudaMesh();
@@ -70,7 +74,6 @@ public:
 
 class CudaSphere: public CudaRTObject {
 public:
-    float3 position;
     float radius;
     CudaSphere(float3 _position, float _radius);
     CudaSphere(float3 _position, float _radius, CudaMaterial *_material);
@@ -80,6 +83,7 @@ public:
 class CudaLight: public CudaRTObject {
 public:
     int lightType;
+    float intensity;
     CudaLight();
     CudaLight(int _lightType);
     CudaLight(int _lightType, float3 _color);
@@ -108,7 +112,11 @@ public:
 
 class CudaMeshLight: public CudaLight {
 public:
+    float3 color;
+    CudaMesh* mesh;
     CudaMeshLight();
+    CudaMeshLight(CudaMesh* _mesh);
+    CudaMeshLight(CudaMesh* _mesh, float3 _color);
 };
 
 //----------------------------------------------------------------------------------------------------------------------

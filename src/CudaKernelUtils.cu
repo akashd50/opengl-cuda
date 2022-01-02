@@ -55,6 +55,10 @@ __device__ __host__ void add(float3 &a, float3 &b) {
     a.x += b.x; a.y += b.y; a.z += b.z;
 }
 
+__device__ __host__ void subtract(float3 &a, float3 &b) {
+    a.x -= b.x; a.y -= b.y; a.z -= b.z;
+}
+
 __device__ __host__ void multiply(float3 &a, float b) {
     a.x *= b; a.y *= b; a.z *= b;
 }
@@ -73,7 +77,7 @@ __device__ __host__ float3 t_to_vec(float3 e, float3 d, float t) {
     return e + (t * d);
 }
 
-__device__ float magnitude(float3 a) {
+__device__ float magnitude(float3 &a) {
     return sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
 }
 
@@ -84,6 +88,11 @@ __device__ float len_squared(float3 a) {
 __device__ float3 normalize(float3 a) {
     float mag = magnitude(a);
     return make_float3(a.x, a.y, a.z)/mag;
+}
+
+__device__ void normalizeR(float3 &a) {
+    float mag = magnitude(a);
+    a.x = a.x/mag; a.y = a.y/mag; a.z = a.z/mag;
 }
 
 __device__ float3 cross(float3 a, float3 b) {
@@ -413,6 +422,17 @@ __device__ void randFloat3(curandState &randState, float3 &vec) {
     vec.z = curand_normal(&randState);
 }
 
+__device__ void randFloat3InMesh(curandState &randState, CudaMesh* mesh, float3 &vec) {
+    randFloat3(randState, vec);
+    normalizeR(vec);
+    vec.x = mesh->position.x + vec.x * mesh->dimensions.x;
+    vec.y = mesh->position.y + vec.y * mesh->dimensions.y;
+    vec.z = mesh->position.z + vec.z * mesh->dimensions.z;
+//    vec.x = mesh->position.x + vec.x;
+//    vec.y = mesh->position.y + vec.y;
+//    vec.z = mesh->position.z + vec.z;
+}
+
 __device__ float3 getReflectedDiffuseRay(HitInfo &hitInfo, CudaThreadData &threadData, bool useReflected) {
     float3 p_n = hitInfo.point + (useReflected ? hitInfo.reflected * 1.5 : hitInfo.normal * 1.5);
     float3 vec = make_float3(0, 0, 0);
@@ -443,7 +463,7 @@ __device__ void doHitTest(float3 &eye, float3 &ray, HitInfo &hitInfo, CudaThread
                 hitInfo.point = t_to_vec(eye, ray, hitInfo.t);
                 hitInfo.normal = getSphereNormal(hitInfo.point, sphere);
                 hitInfo.color = sphere->material->diffuse;
-                hitInfo.index = i;
+                hitInfo.objectId = sphere->id;
                 if (threadData.debug) {
                     printf("\n\ndoHitTest @ index (%d) with t (%f)\n", i, hitInfo.t);
                 }
@@ -455,7 +475,7 @@ __device__ void doHitTest(float3 &eye, float3 &ray, HitInfo &hitInfo, CudaThread
                 hitInfo.object = mesh;
                 hitInfo.point = t_to_vec(eye, ray, hitInfo.t);
                 hitInfo.color = mesh->material->diffuse;
-                hitInfo.index = i;
+                hitInfo.objectId = mesh->id;
                 if (threadData.debug) {
                     printf("\n\ndoHitTest @ index (%d) with t (%f)\n", i, hitInfo.t);
                 }
@@ -472,7 +492,18 @@ __device__ void doHitTest(float3 &eye, float3 &ray, HitInfo &hitInfo, CudaThread
                 hitInfo.point = t_to_vec(eye, ray, hitInfo.t);
                 hitInfo.normal = getSphereNormal(hitInfo.point, sphere);
                 hitInfo.color = ray_color(ray);
-                hitInfo.index = i;
+                hitInfo.objectId = light->id;
+                if (threadData.debug) {
+                    printf("\n\ndoHitTest @ index (%d) with t (%f)\n", i, hitInfo.t);
+                }
+            }
+        } else if (light->lightType == MESH_LIGHT) {
+            auto mesh = ((CudaMeshLight*)scene->lights[i])->mesh;
+            if (checkHitOnMeshHelperNR(eye, ray, mesh, hitInfo, threadData.debug)) {
+                hitInfo.object = light;
+                hitInfo.point = t_to_vec(eye, ray, hitInfo.t);
+                hitInfo.color = ((CudaMeshLight*)scene->lights[i])->color;
+                hitInfo.objectId = light->id;
                 if (threadData.debug) {
                     printf("\n\ndoHitTest @ index (%d) with t (%f)\n", i, hitInfo.t);
                 }
@@ -481,59 +512,78 @@ __device__ void doHitTest(float3 &eye, float3 &ray, HitInfo &hitInfo, CudaThread
     }
 }
 
-__device__ void getLighting(float3 &ray, HitInfo &hitInfo, CudaThreadData &threadData, float3 &lighting) {
-//    To Be Used Later when more lights are added
-//    CudaScene* scene = threadData.scene;
-//    for (int i=0; i<scene->numLights; i++) {
-//        auto light = (CudaLight *) scene->lights[i];
-//        if (light->lightType == SKYBOX_LIGHT) {
-//            lighting = lighting + ray_color(ray) * 0.5;
-//        }
-//    }
+__device__ void getLighting(HitInfo &hitInfo, CudaThreadData &threadData, float3 &lighting) {
+    //    To Be Used Later when more lights are added
+
+    CudaScene* scene = threadData.scene;
+    HitInfo tempHitInfo;
+    int numSamplesPerLight = 4;
+    for (int i=0; i<scene->numLights; i++) {
+        auto light = (CudaLight *) scene->lights[i];
+        if (light->lightType == SKYBOX_LIGHT) {
+            for (int s=0; s<numSamplesPerLight; s++) {
+                float3 randVecToLight = getReflectedDiffuseRay(hitInfo, threadData, false);
+                tempHitInfo.t = MAX_T;
+                doHitTest(hitInfo.point, randVecToLight, tempHitInfo, threadData);
+                if (tempHitInfo.objectId == light->id) {
+                    lighting = lighting + ray_color(randVecToLight) * light->intensity;
+                }
+            }
+        }
+        // Maybe only do lighting here and not material stuff - so add them separately in the main trace ray func..
+        if (light->lightType == MESH_LIGHT) {
+            CudaMeshLight* meshLight = (CudaMeshLight*)light;
+            float3 randVecToLight = make_float3(0, 0, 0);
+            for (int s=0; s<numSamplesPerLight; s++) {
+                randFloat3InMesh(threadData.randState, meshLight->mesh, randVecToLight);
+                randVecToLight = normalize(randVecToLight - hitInfo.point);
+                tempHitInfo.t = MAX_T;
+                doHitTest(hitInfo.point, randVecToLight, tempHitInfo, threadData);
+                if (tempHitInfo.objectId == light->id) {
+                    float diff = max(dot(hitInfo.normal, randVecToLight), 0.0f);
+                    lighting = lighting + diff * meshLight->color * meshLight->intensity;
+                }
+            }
+        }
+    }
+    lighting = lighting/(float)(numSamplesPerLight * scene->numLights);
 }
 
-__device__ void calculateLightingHelper(float3 &ray, HitInfo &newHit, CudaThreadData &threadData, float3 &lighting, int &index) {
+__device__ void doPathTracing(float3 &ray, HitInfo &hitInfo, CudaThreadData &threadData, float3 &lighting, int &index) {
     if (index >= 3) return;
 
-    newHit.reflected = normalize(getReflectedRay(ray, newHit.normal));
-    ray = getReflectedDiffuseRay(newHit, threadData, true);
-    newHit.t = MAX_T;
-    doHitTest(newHit.point, ray, newHit, threadData);
-    if (newHit.object->type == LIGHT) {
-        lighting = lighting + newHit.color;
+    if (index != 0) {
+        hitInfo.reflected = normalize(getReflectedRay(ray, hitInfo.normal));
+        ray = getReflectedDiffuseRay(hitInfo, threadData, true);
+    } else {
+        ray = getReflectedDiffuseRay(hitInfo, threadData, false);
+    }
+
+    hitInfo.t = MAX_T;
+    doHitTest(hitInfo.point, ray, hitInfo, threadData);
+    if (hitInfo.object->type == LIGHT) {
+        lighting = lighting + hitInfo.color;
     } else {
         index++;
-        CudaMaterial* mat = newHit.object->material;
-        calculateLightingHelper(ray, newHit, threadData, lighting, index);
+        CudaMaterial* mat = hitInfo.object->material;
+        doPathTracing(ray, hitInfo, threadData, lighting, index);
         //Calculate the lighting from all other lights here
-        //getLighting(ray, newHit, threadData, lighting);
+        //getLighting(ray, hitInfo, threadData, lighting);
         lighting = lighting * mat->albedo * mat->diffuse;
     }
 }
 
-__device__ float3 calculateLighting(HitInfo &hitInfo, CudaThreadData &threadData) {
-//    if (threadData.debug) {
-//        printf("\n\nCalculating Lighting for Hit(%d) T(%f) P(%f, %f, %f) | Normal(%f, %f, %f)\n", hitInfo.index, hitInfo.t,
-//               hitInfo.point.x, hitInfo.point.y, hitInfo.point.z, hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z);
-//    }
+__device__ float3 calculateLightingPathTraced(HitInfo &hitInfo, CudaThreadData &threadData) {
     if (hitInfo.object->type == LIGHT) {
         // May change this to include other light properties like intensity and stuff
         return hitInfo.color;
     }
 
     float3 lighting = make_float3(0, 0, 0);
-    HitInfo newHit;
-    float3 reflected = getReflectedDiffuseRay(hitInfo, threadData, false);
-    doHitTest(hitInfo.point, reflected, newHit, threadData);
+    float3 ray = make_float3(0, 0, 0);
     int index = 0;
-    if (newHit.object->type == LIGHT) {
-        lighting = lighting + newHit.color;
-    }else {
-        CudaMaterial* mat = newHit.object->material;
-        calculateLightingHelper(reflected, newHit, threadData, lighting, index);
-        lighting = lighting * mat->albedo * mat->diffuse;
-    }
-    //lighting = (lighting/((float)index + 1.0f)) * hitInfo.object->material->diffuse;
+    HitInfo newHit(hitInfo);
+    doPathTracing(ray, newHit, threadData, lighting, index);
     lighting = lighting * hitInfo.object->material->diffuse;
     return lighting;
 }
@@ -559,7 +609,7 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, int maxBounces, CudaThr
             newEye = hitInfo.point;
             if (threadData.debug) {
                 printf("\n\nHitInfo(%d); Hit T(%f) @ (%f, %f, %f) | Normal(%f, %f, %f) | Reflected(%f, %f, %f)\n\n\n\n\n\n\n",
-                       hitInfo.index, hitInfo.t, hitInfo.point.x, hitInfo.point.y, hitInfo.point.z,
+                       hitInfo.objectId, hitInfo.t, hitInfo.point.x, hitInfo.point.y, hitInfo.point.z,
                        hitInfo.normal.x, hitInfo.normal.y, hitInfo.normal.z,
                        newRay.x, newRay.y, newRay.z);
             }
@@ -572,6 +622,7 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, int maxBounces, CudaThr
     if (threadData.debug) printf("\n\n\n\n\n\n\n\nStarting to Sum lighting\n\n");
     // Sum all colors from stack
     float3 color = make_float3(0.0, 0.0, 0.0);
+    float3 currLighting = make_float3(0, 0, 0);
     if (stack->size() >= 2) {
         while(!stack->empty()) {
             HitInfo curr = stack->top();
@@ -582,18 +633,19 @@ __device__ float3 traceSingleRay(float3 eye, float3 ray, int maxBounces, CudaThr
 //                printf("Color(%f, %f, %f)\n", color.x, color.y, color.z);
 //            }
             if (curr.object->type < LIGHT) {
-                //color = curr.color + (curr.object->material->reflective * color);
-                float3 ref = curr.object->material->reflective;
-                float3 currLighting = calculateLighting(curr, threadData);
-                //color = (1.0 - ref) * currLighting + (ref * color);
-                color = currLighting + (ref * color);
+                //float3 currLighting = calculateLightingPathTraced(curr, threadData);
+                getLighting(curr, threadData, currLighting);
+                color = currLighting * curr.object->material->diffuse + (curr.object->material->reflective * color);
+                currLighting = currLighting * curr.object->material->albedo;
             } else {
+                //currLighting = curr.color;
                 color = curr.color;
             }
         }
     } else if (stack->size() == 1) {
         HitInfo curr = stack->top(); stack->pop();
-        color = color + calculateLighting(curr, threadData);
+        //color = color + calculateLightingPathTraced(curr, threadData);
+        color = curr.color;
     }
 
     color.x = sqrt(color.x);
