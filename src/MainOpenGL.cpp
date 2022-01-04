@@ -53,17 +53,17 @@ void MainOpenGL::init()
 
     auto mat1 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.1, 0.6, 0.1));
     mat1->reflective = make_float3(0.2, 0.2, 0.2);
-    mat1->albedo = 0.8;
+    mat1->albedo = 0.5;
     mat1->roughness = 0.8f;
 
     auto mat2 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.6, 0.6, 0.6));
     mat2->reflective = make_float3(0.3, 0.3, 0.3);
-    mat2->albedo = 0.8;
+    mat2->albedo = 0.5;
     mat2->roughness = 0.5f;
 
     auto mat3 = new CudaMaterial(make_float3(0.1, 0.1, 0.1), make_float3(0.3, 0.2, 0.6));
     mat3->reflective = make_float3(0.2, 0.2, 0.2);
-    mat3->albedo = 0.8;
+    mat3->albedo = 0.5;
     mat3->roughness = 1.0f;
 
     cudaScene->addObject(new CudaSphere(make_float3(2.0, -1.0, -8.0), 2.0, mat1));
@@ -72,7 +72,7 @@ void MainOpenGL::init()
                                                              glm::vec3(1));
     auto meshLightObj = ObjDecoder::createMesh("../resources/cube.obj", meshLightT);
     auto meshLight = new CudaMeshLight(meshLightObj, make_float3(0.0, 1.0, 1.0));
-    meshLight->intensity = 2.5f;
+    meshLight->intensity = 5.0f;
     cudaScene->addLight(meshLight);
 
     glm::mat4 meshT = ObjDecoder::createTransformationMatrix(glm::vec3(-1.0, 0.0f, -7.0f),

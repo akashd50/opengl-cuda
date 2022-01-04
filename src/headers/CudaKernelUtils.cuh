@@ -23,16 +23,25 @@ public:
 
 //----------------------------------------------------------------------------------------------------------------------
 
+class Ray {
+public:
+    float3 origin, direction;
+    __device__ Ray(float3 _o, float3 _d): origin(_o), direction(_d) {}
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+
 class HitInfo {
 public:
     CudaRTObject* object;
     float t;
-    float3 point, normal, reflected, color;
+    float3 point, normal, reflected, lighting;
     int objectId;
-    __device__ HitInfo(): t(MAX_T) {}
+    Ray* ray;
+    __device__ HitInfo(): t(MAX_T), lighting(make_float3(0, 0, 0)) {}
     __device__ HitInfo(HitInfo &hitInfo): t(hitInfo.t), object(hitInfo.object), point(hitInfo.point),
-    normal(hitInfo.normal), reflected(hitInfo.reflected), color(hitInfo.color), objectId(-1) {}
-    __device__ HitInfo(CudaRTObject* _object, float _t) : object(_object), t(_t) {}
+                                          normal(hitInfo.normal), reflected(hitInfo.reflected), lighting(hitInfo.lighting), objectId(-1) {}
+    __device__ HitInfo(CudaRTObject* _object, float _t) : object(_object), t(_t), lighting(make_float3(0, 0, 0)) {}
     __device__ bool isHit() {
         return t != MAX_T;
     }
